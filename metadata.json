@@ -1,0 +1,6 @@
+{
+  "name": "Classroom Magic – Vòng Quay May Mắn & Gameshow Lớp Học",
+  "description": "Ứng dụng gọi tên học sinh ngẫu nhiên cùng cô giáo Ms Mèo, logo Mèo cute, 10 kiểu gameshow truyền hình, 5 trò dân gian 3D, camera cử chỉ và pháo hoa rực rỡ toàn màn hình.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
