@@ -1,7 +1,17 @@
 /**
- * Real-time Hand Gesture Recognition Engine
- * Runs completely client-side in the browser via WebCam and Canvas Computer Vision.
+ * Real-time AI Hand Gesture Recognition Engine
+ * Powered by Google MediaPipe Hands with Fallback Computer Vision,
+ * 6-State Machine, 8-10 Frame Hold Confirmation, and Mandatory Hand-Lowering Reset.
  */
+
+export type CameraHandState =
+  | 'no_hand'              // Không phát hiện bàn tay
+  | 'waiting_gesture'      // Đang chờ cử chỉ bàn tay (chưa xòe ngón)
+  | 'detecting_hand'       // Đang nhận diện bàn tay
+  | 'confirming_gesture'   // Đang xác nhận cử chỉ (X ngón)... Giữ yên 8-10 frame
+  | 'confirmed'            // Đã nhận diện thành công: Giơ X ngón!
+  | 'locked_cooldown'      // Đang khóa chống nhận diện lặp (2-3 giây)
+  | 'waiting_hand_lowered'; // Chờ hạ tay xuống để sẵn sàng cho lượt tiếp theo
 
 export type RecognizedGesture =
   | 'finger_1'
@@ -10,17 +20,27 @@ export type RecognizedGesture =
   | 'finger_4'
   | 'finger_5'
   | 'wave'
-  | 'thumbs_up'
-  | 'open_palm'
-  | 'peace'
-  | 'fist'
   | 'none';
 
+export interface HandLandmark {
+  x: number;
+  y: number;
+  z?: number;
+}
+
 export interface GestureDetectionResult {
+  state: CameraHandState;
   gesture: RecognizedGesture;
-  fingerCount?: number;
-  label: string;
-  confidence: number;
+  fingerCount?: number;       // ONLY defined when confirmed and ready to trigger
+  previewCount: number;       // Currently stabilized tentative finger count
+  isHandRaised: boolean;      // True ONLY when a hand is genuinely raised in camera view
+  consecutiveFrames: number;  // Current consecutive stable frames (0 to REQUIRED_FRAMES)
+  requiredFrames: number;     // 8 to 10 frames
+  confirmProgress: number;    // 0 to 1 progress of holding steady before confirming
+  cooldownRemainingMs: number;// Milliseconds remaining in cooldown
+  confidence: number;         // 0 to 100% confidence
+  label: string;              // Descriptive Vietnamese status
+  landmarks?: HandLandmark[]; // 21 3D landmarks for augmented reality skeleton
   box?: { x: number; y: number; width: number; height: number };
 }
 
@@ -33,21 +53,74 @@ export class HandGestureDetector {
   private isRunning: boolean = false;
   private facingMode: 'user' | 'environment' = 'user';
 
-  // Tracking history for wave and gesture stabilization
-  private centroidHistory: Array<{ x: number; y: number; time: number }> = [];
-  private lastTriggeredTime: number = 0;
-  private cooldownMs: number = 1800; // prevent rapid re-trigger
-  private candidateGesture: RecognizedGesture = 'none';
-  private candidateStartTime: number = 0;
-  private stableHoldRequiredMs: number = 400; // hold gesture for 400ms to confirm
+  // MediaPipe Hands instance
+  private mediaPipeHands: any = null;
+  private isMediaPipeReady: boolean = false;
+  private isMediaPipeProcessing: boolean = false;
+
+  // Throttling to 20 FPS (50ms) for high stability & low CPU
+  private lastProcessTime: number = 0;
+  private processIntervalMs: number = 50;
+
+  // 1. Frame verification & Temporal Smoothing (8-10 consecutive frames requirement)
+  private readonly REQUIRED_CONSECUTIVE_FRAMES = 8; // 8 consecutive frames (~400ms at 20fps)
+  private candidateFingerCount: number = 0;
+  private consecutiveFrameCount: number = 0;
+  private jitterToleranceCount: number = 0; // tolerance for 1 momentary frame glitch
+
+  // 2. State Machine & Anti-repeat Cooldown
+  private currentState: CameraHandState = 'no_hand';
+  private lastTriggerTime: number = 0;
+  private readonly COOLDOWN_DURATION_MS = 2500; // 2.5 seconds lock after trigger
+  private mustLowerHandToReset: boolean = false;
+  private framesWithNoHand: number = 0;
 
   private onGestureCallback: ((result: GestureDetectionResult) => void) | null = null;
 
   constructor() {
     this.canvas = document.createElement('canvas');
-    this.canvas.width = 160;
-    this.canvas.height = 120;
+    this.canvas.width = 320;
+    this.canvas.height = 240;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    this.initMediaPipe();
+  }
+
+  /**
+   * Initialize MediaPipe Hands if loaded from CDN
+   */
+  private initMediaPipe() {
+    if (typeof window === 'undefined') return;
+
+    const checkMediaPipe = () => {
+      const win = window as any;
+      if (win.Hands) {
+        try {
+          this.mediaPipeHands = new win.Hands({
+            locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+          });
+
+          this.mediaPipeHands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.75,
+            minTrackingConfidence: 0.75,
+          });
+
+          this.mediaPipeHands.onResults((results: any) => {
+            this.handleMediaPipeResults(results);
+            this.isMediaPipeProcessing = false;
+          });
+
+          this.isMediaPipeReady = true;
+        } catch (e) {
+          console.warn('MediaPipe Hands init deferred:', e);
+        }
+      } else {
+        setTimeout(checkMediaPipe, 250);
+      }
+    };
+
+    checkMediaPipe();
   }
 
   public setOnGesture(cb: (result: GestureDetectionResult) => void) {
@@ -73,6 +146,7 @@ export class HandGestureDetector {
       this.video.srcObject = this.stream;
       await this.video.play();
       this.isRunning = true;
+      this.resetState();
       this.loop();
       return true;
     } catch (err) {
@@ -95,6 +169,17 @@ export class HandGestureDetector {
       this.video.srcObject = null;
       this.video = null;
     }
+    this.resetState();
+  }
+
+  public resetState() {
+    this.currentState = 'no_hand';
+    this.candidateFingerCount = 0;
+    this.consecutiveFrameCount = 0;
+    this.jitterToleranceCount = 0;
+    this.mustLowerHandToReset = false;
+    this.framesWithNoHand = 0;
+    this.isMediaPipeProcessing = false;
   }
 
   public toggleFacingMode(videoElement: HTMLVideoElement): Promise<boolean> {
@@ -111,15 +196,27 @@ export class HandGestureDetector {
   }
 
   private loop = () => {
-    if (!this.isRunning || !this.video || !this.ctx || !this.canvas) return;
+    if (!this.isRunning || !this.video) return;
 
-    if (this.video.readyState >= 2) {
-      this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
-      const frameData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-      const detection = this.processFrame(frameData);
+    const now = performance.now();
+    if (now - this.lastProcessTime >= this.processIntervalMs && this.video.readyState >= 2) {
+      this.lastProcessTime = now;
 
-      if (this.onGestureCallback) {
-        this.onGestureCallback(detection);
+      // Primary: Use MediaPipe Hands if ready
+      if (this.isMediaPipeReady && this.mediaPipeHands && !this.isMediaPipeProcessing) {
+        this.isMediaPipeProcessing = true;
+        this.mediaPipeHands.send({ image: this.video }).catch(() => {
+          this.isMediaPipeProcessing = false;
+        });
+      } else if (!this.isMediaPipeReady && this.ctx && this.canvas) {
+        // Fallback: fast pixel segmentation while MediaPipe loads
+        this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+        const frameData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+        const detection = this.processFallbackFrame(frameData, now);
+
+        if (this.onGestureCallback) {
+          this.onGestureCallback(detection);
+        }
       }
     }
 
@@ -127,11 +224,257 @@ export class HandGestureDetector {
   };
 
   /**
-   * Fast real-time skin & motion segmentation for gesture detection
+   * Process results from Google MediaPipe Hands Neural Network (21 3D Landmarks)
    */
-  private processFrame(imageData: ImageData): GestureDetectionResult {
-    const { width, height, data } = imageData;
+  private handleMediaPipeResults(results: any) {
+    if (!this.isRunning || !this.onGestureCallback) return;
     const now = performance.now();
+
+    const landmarksList = results.multiHandLandmarks;
+
+    // 1. Hand Absent / Lowered Check
+    if (!landmarksList || landmarksList.length === 0) {
+      this.framesWithNoHand++;
+      // If hand has been absent for at least 4 frames (~200ms), unlock mustLowerHandToReset
+      if (this.framesWithNoHand >= 4) {
+        this.mustLowerHandToReset = false;
+      }
+
+      this.consecutiveFrameCount = 0;
+      this.candidateFingerCount = 0;
+      this.currentState = 'no_hand';
+
+      this.onGestureCallback({
+        state: 'no_hand',
+        gesture: 'none',
+        previewCount: 1,
+        isHandRaised: false,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: 0,
+        confidence: 0,
+        label: '✋ Không phát hiện bàn tay – Hãy giơ tay trước camera',
+      });
+      return;
+    }
+
+    // Hand detected!
+    this.framesWithNoHand = 0;
+    const landmarks: HandLandmark[] = landmarksList[0];
+
+    // 2. Anti-repeat cooldown & Mandatory Hand Lowering
+    const timeSinceLastTrigger = now - this.lastTriggerTime;
+    if (timeSinceLastTrigger < this.COOLDOWN_DURATION_MS) {
+      const cooldownRemaining = Math.max(0, this.COOLDOWN_DURATION_MS - timeSinceLastTrigger);
+      this.currentState = 'locked_cooldown';
+      this.onGestureCallback({
+        state: 'locked_cooldown',
+        gesture: 'none',
+        previewCount: this.candidateFingerCount || 1,
+        isHandRaised: true,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: Math.round(cooldownRemaining),
+        confidence: 95,
+        label: `🔒 Đang khóa chống lặp (${(cooldownRemaining / 1000).toFixed(1)}s)...`,
+        landmarks,
+      });
+      return;
+    }
+
+    if (this.mustLowerHandToReset) {
+      this.currentState = 'waiting_hand_lowered';
+      this.onGestureCallback({
+        state: 'waiting_hand_lowered',
+        gesture: 'none',
+        previewCount: this.candidateFingerCount || 1,
+        isHandRaised: true,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: 0,
+        confidence: 92,
+        label: '⬇️ Vui lòng hạ tay xuống để sẵn sàng cho lượt tiếp theo!',
+        landmarks,
+      });
+      return;
+    }
+
+    // 3. Hand Elevation Check (Wrist or fingers must be elevated)
+    const wrist = landmarks[0];
+    const middleTip = landmarks[12];
+    const isHandElevated = middleTip.y < 0.75 || wrist.y < 0.85;
+
+    if (!isHandElevated) {
+      this.consecutiveFrameCount = 0;
+      this.currentState = 'waiting_gesture';
+      this.onGestureCallback({
+        state: 'waiting_gesture',
+        gesture: 'none',
+        previewCount: 1,
+        isHandRaised: false,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: 0,
+        confidence: 60,
+        label: '✋ Hãy giơ tay lên cao trước camera để bắt đầu',
+        landmarks,
+      });
+      return;
+    }
+
+    // 4. Mathematical Finger Extension Recognition using 3D Vectors
+    // Distance from wrist to tip vs wrist to PIP (invariant to rotation and angle)
+    const isExtended = (tipIdx: number, pipIdx: number): boolean => {
+      const tip = landmarks[tipIdx];
+      const pip = landmarks[pipIdx];
+      const distTip = Math.hypot(tip.x - wrist.x, tip.y - wrist.y);
+      const distPip = Math.hypot(pip.x - wrist.x, pip.y - wrist.y);
+      return distTip > distPip * 1.15;
+    };
+
+    const isIndex = isExtended(8, 6);
+    const isMiddle = isExtended(12, 10);
+    const isRing = isExtended(16, 14);
+    const isPinky = isExtended(20, 18);
+
+    // Thumb Abduction Check: Distance from Thumb Tip (4) to Pinky MCP (17) vs Thumb IP (3) to Pinky MCP (17)
+    const thumbTip = landmarks[4];
+    const thumbIP = landmarks[3];
+    const pinkyMCP = landmarks[17];
+    const distThumbTip = Math.hypot(thumbTip.x - pinkyMCP.x, thumbTip.y - pinkyMCP.y);
+    const distThumbIP = Math.hypot(thumbIP.x - pinkyMCP.x, thumbIP.y - pinkyMCP.y);
+    const isThumb = distThumbTip > distThumbIP * 1.25;
+
+    // Count extended fingers
+    let fingerCount =
+      (isIndex ? 1 : 0) +
+      (isMiddle ? 1 : 0) +
+      (isRing ? 1 : 0) +
+      (isPinky ? 1 : 0) +
+      (isThumb ? 1 : 0);
+
+    // Bounding Box calculation
+    let minX = 1;
+    let maxX = 0;
+    let minY = 1;
+    let maxY = 0;
+    for (const pt of landmarks) {
+      if (pt.x < minX) minX = pt.x;
+      if (pt.x > maxX) maxX = pt.x;
+      if (pt.y < minY) minY = pt.y;
+      if (pt.y > maxY) maxY = pt.y;
+    }
+
+    const box = {
+      x: Math.round(minX * (this.video?.videoWidth || 640)),
+      y: Math.round(minY * (this.video?.videoHeight || 480)),
+      width: Math.round((maxX - minX) * (this.video?.videoWidth || 640)),
+      height: Math.round((maxY - minY) * (this.video?.videoHeight || 480)),
+    };
+
+    // If 0 fingers extended (fist or resting)
+    if (fingerCount === 0) {
+      this.consecutiveFrameCount = 0;
+      this.currentState = 'waiting_gesture';
+      this.onGestureCallback({
+        state: 'waiting_gesture',
+        gesture: 'none',
+        previewCount: 1,
+        isHandRaised: true,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: 0,
+        confidence: 85,
+        label: '✋ Đang chờ cử chỉ – Hãy xòe từ 1 đến 5 ngón tay',
+        landmarks,
+        box,
+      });
+      return;
+    }
+
+    // 5. Temporal Smoothing & Consecutive Frame Counter (8-10 Frames Hold)
+    if (this.candidateFingerCount === fingerCount) {
+      this.consecutiveFrameCount++;
+      this.jitterToleranceCount = 0;
+    } else {
+      // 1-frame jitter tolerance
+      if (this.consecutiveFrameCount >= 3 && this.jitterToleranceCount === 0) {
+        this.jitterToleranceCount++;
+      } else {
+        this.candidateFingerCount = fingerCount;
+        this.consecutiveFrameCount = 1;
+        this.jitterToleranceCount = 0;
+      }
+    }
+
+    const confirmProgress = Math.min(1, this.consecutiveFrameCount / this.REQUIRED_CONSECUTIVE_FRAMES);
+    const iconMap = ['☝️', '✌️', '🤟', '🖖', '🖐️'];
+    const currentIcon = iconMap[fingerCount - 1] || '🖐️';
+
+    // 6. Holding verification
+    if (this.consecutiveFrameCount < this.REQUIRED_CONSECUTIVE_FRAMES) {
+      this.currentState = 'confirming_gesture';
+      this.onGestureCallback({
+        state: 'confirming_gesture',
+        gesture: 'none',
+        previewCount: fingerCount,
+        isHandRaised: true,
+        consecutiveFrames: this.consecutiveFrameCount,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress,
+        cooldownRemainingMs: 0,
+        confidence: 96,
+        label: `${currentIcon} Đang xác nhận giơ ${fingerCount} ngón (${this.consecutiveFrameCount}/${this.REQUIRED_CONSECUTIVE_FRAMES} frame)... Giữ yên tay!`,
+        landmarks,
+        box,
+      });
+      return;
+    }
+
+    // --- TRIGGER CONFIRMED EVENT ---
+    this.currentState = 'confirmed';
+    this.lastTriggerTime = now;
+    this.mustLowerHandToReset = true; // MUST LOWER HAND BEFORE NEXT ROUND
+    this.consecutiveFrameCount = 0;
+
+    const gestureType: RecognizedGesture =
+      fingerCount === 1
+        ? 'finger_1'
+        : fingerCount === 2
+        ? 'finger_2'
+        : fingerCount === 3
+        ? 'finger_3'
+        : fingerCount === 4
+        ? 'finger_4'
+        : 'finger_5';
+
+    this.onGestureCallback({
+      state: 'confirmed',
+      gesture: gestureType,
+      fingerCount,
+      previewCount: fingerCount,
+      isHandRaised: true,
+      consecutiveFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+      requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+      confirmProgress: 1,
+      cooldownRemainingMs: this.COOLDOWN_DURATION_MS,
+      confidence: 99,
+      label: `🎉 ${currentIcon} ĐÃ XÁC NHẬN: Chọn chính xác ${fingerCount} học sinh!`,
+      landmarks,
+      box,
+    });
+  }
+
+  /**
+   * Fallback pixel segmentation (active only while MediaPipe loads from CDN)
+   */
+  private processFallbackFrame(imageData: ImageData, now: number): GestureDetectionResult {
+    const { width, height, data } = imageData;
 
     let skinPixelCount = 0;
     let sumX = 0;
@@ -141,31 +484,22 @@ export class HandGestureDetector {
     let minY = height;
     let maxY = 0;
 
-    // Scan central 75% interactive region to avoid edge background noise
-    const startX = Math.floor(width * 0.12);
-    const endX = Math.floor(width * 0.88);
-    const startY = Math.floor(height * 0.1);
-    const endY = Math.floor(height * 0.9);
-
-    // Grid step for performance
-    const step = 2;
-    for (let y = startY; y < endY; y += step) {
-      for (let x = startX; x < endX; x += step) {
+    for (let y = 10; y < height - 10; y += 3) {
+      for (let x = 10; x < width - 10; x += 3) {
         const idx = (y * width + x) * 4;
         const r = data[idx];
         const g = data[idx + 1];
         const b = data[idx + 2];
 
-        // Normalized RGB skin color heuristic (works across various lighting & skin tones)
+        // Broad, lighting-adaptive skin condition
         const isSkin =
-          r > 75 &&
+          r > 70 &&
           g > 40 &&
           b > 25 &&
           r > g &&
           r > b &&
-          r - g > 15 &&
-          Math.abs(r - g) > 15 &&
-          r - b > 15;
+          r - g >= 8 &&
+          r - b >= 8;
 
         if (isSkin) {
           skinPixelCount++;
@@ -179,180 +513,34 @@ export class HandGestureDetector {
       }
     }
 
-    const minRequiredPixels = 120;
-    if (skinPixelCount < minRequiredPixels) {
-      return { gesture: 'none', label: 'Không thấy tay', confidence: 0 };
-    }
-
-    const centerX = sumX / skinPixelCount;
-    const centerY = sumY / skinPixelCount;
-    const boxW = Math.max(10, maxX - minX);
-    const boxH = Math.max(10, maxY - minY);
-    const aspectRatio = boxW / boxH; // width / height
-    const density = skinPixelCount / ((boxW * boxH) / (step * step));
-
-    // Update centroid trajectory history (keep last 12 frames ~ 400ms)
-    this.centroidHistory.push({ x: centerX, y: centerY, time: now });
-    if (this.centroidHistory.length > 15) {
-      this.centroidHistory.shift();
-    }
-
-    // 1. WAVE DETECTION (Vẫy tay)
-    // Check horizontal oscillatory motion
-    let isWave = false;
-    if (this.centroidHistory.length >= 8) {
-      let dirChanges = 0;
-      let lastDir = 0;
-      let maxDx = 0;
-      for (let i = 1; i < this.centroidHistory.length; i++) {
-        const dx = this.centroidHistory[i].x - this.centroidHistory[i - 1].x;
-        maxDx = Math.max(maxDx, Math.abs(dx));
-        const dir = dx > 1.2 ? 1 : dx < -1.2 ? -1 : 0;
-        if (dir !== 0 && dir !== lastDir) {
-          dirChanges++;
-          lastDir = dir;
-        }
-      }
-      if (dirChanges >= 3 && maxDx > 3) {
-        isWave = true;
-      }
-    }
-
-    // 2. FINGER TOP ANALYSIS (Vertical profile of top 35% of bounding box)
-    const topBandHeight = Math.floor(boxH * 0.35);
-    const colProfiles: number[] = [];
-
-    for (let x = minX; x <= maxX; x += step) {
-      let columnSkinCount = 0;
-      for (let y = minY; y <= minY + topBandHeight; y += step) {
-        const idx = (y * width + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
-        if (r > 75 && g > 40 && b > 25 && r > g && r > b) {
-          columnSkinCount++;
-        }
-      }
-      colProfiles.push(columnSkinCount);
-    }
-
-    // Smooth column profile with a 3-tap moving average
-    const smoothedProfiles: number[] = [];
-    for (let i = 0; i < colProfiles.length; i++) {
-      const prev = colProfiles[Math.max(0, i - 1)];
-      const curr = colProfiles[i];
-      const next = colProfiles[Math.min(colProfiles.length - 1, i + 1)];
-      smoothedProfiles.push((prev + curr + next) / 3);
-    }
-
-    // Detect distinct peaks with minimum valley separation
-    const minPeakHeight = Math.max(2, Math.floor((topBandHeight / step) * 0.25));
-    const minSeparationCols = Math.max(2, Math.floor(colProfiles.length * 0.12));
-    let detectedPeakIndices: number[] = [];
-
-    for (let i = 1; i < smoothedProfiles.length - 1; i++) {
-      if (
-        smoothedProfiles[i] >= minPeakHeight &&
-        smoothedProfiles[i] >= smoothedProfiles[i - 1] &&
-        smoothedProfiles[i] >= smoothedProfiles[i + 1]
-      ) {
-        // Check distance to previous peak
-        if (
-          detectedPeakIndices.length === 0 ||
-          i - detectedPeakIndices[detectedPeakIndices.length - 1] >= minSeparationCols
-        ) {
-          detectedPeakIndices.push(i);
-        }
-      }
-    }
-
-    const numFingers = detectedPeakIndices.length;
-
-    let detected: RecognizedGesture = 'none';
-    let fingerCount: number | undefined = undefined;
-    let label = 'Đang nhận diện cử chỉ...';
-    let confidence = 0.5;
-
-    if (isWave) {
-      detected = 'wave';
-      fingerCount = 1;
-      label = '👋 Vẫy tay (Chọn 1 bạn)';
-      confidence = 0.88;
-    } else if (numFingers === 1 || (aspectRatio < 0.65 && boxH > 30 && density < 0.65)) {
-      // 1 single upright finger (index finger or tall shape)
-      detected = 'finger_1';
-      fingerCount = 1;
-      label = '☝️ Giơ 1 ngón -> Chọn 1 bạn';
-      confidence = 0.85;
-    } else if (numFingers === 2 || (aspectRatio >= 0.55 && aspectRatio <= 1.05 && numFingers === 2)) {
-      // 2 fingers (peace / victory / 2 fingers)
-      detected = 'finger_2';
-      fingerCount = 2;
-      label = '✌️ Giơ 2 ngón -> Chọn 2 bạn';
-      confidence = 0.85;
-    } else if (numFingers === 3) {
-      // 3 fingers
-      detected = 'finger_3';
-      fingerCount = 3;
-      label = '🤟 Giơ 3 ngón -> Chọn 3 bạn';
-      confidence = 0.84;
-    } else if (numFingers === 4) {
-      // 4 fingers
-      detected = 'finger_4';
-      fingerCount = 4;
-      label = '🖖 Giơ 4 ngón -> Chọn 4 bạn';
-      confidence = 0.83;
-    } else if (numFingers >= 5 || (aspectRatio >= 0.75 && numFingers >= 4 && density < 0.58)) {
-      // 5 fingers / Open palm
-      detected = 'finger_5';
-      fingerCount = 5;
-      label = '🖐️ Giơ 5 ngón -> Chọn 5 bạn';
-      confidence = 0.85;
-    } else if (density > 0.65 && numFingers <= 1 && aspectRatio > 0.7 && aspectRatio < 1.3) {
-      // High density compact blob -> Fist
-      detected = 'fist';
-      fingerCount = 1;
-      label = '✊ Nắm tay (Đếm ngược 3-2-1)';
-      confidence = 0.8;
-    } else if (centerY < minY + boxH * 0.45 && aspectRatio < 0.75) {
-      // Thumb pointing up
-      detected = 'thumbs_up';
-      fingerCount = 1;
-      label = '👍 Giơ ngón cái -> Chọn 1 bạn';
-      confidence = 0.8;
-    }
-
-    // Stabilization filter to prevent flicker & auto-cooldown
-    if (detected !== 'none') {
-      if (this.candidateGesture !== detected) {
-        this.candidateGesture = detected;
-        this.candidateStartTime = now;
-      } else {
-        const holdDuration = now - this.candidateStartTime;
-        if (holdDuration >= this.stableHoldRequiredMs) {
-          // Gesture is stable! Check cooldown
-          if (now - this.lastTriggeredTime > this.cooldownMs) {
-            this.lastTriggeredTime = now;
-            return {
-              gesture: detected,
-              fingerCount,
-              label,
-              confidence,
-              box: { x: minX, y: minY, width: boxW, height: boxH },
-            };
-          }
-        }
-      }
-    } else {
-      this.candidateGesture = 'none';
+    if (skinPixelCount < 120) {
+      this.consecutiveFrameCount = 0;
+      return {
+        state: 'no_hand',
+        gesture: 'none',
+        previewCount: 1,
+        isHandRaised: false,
+        consecutiveFrames: 0,
+        requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+        confirmProgress: 0,
+        cooldownRemainingMs: 0,
+        confidence: 0,
+        label: '✋ Đang kết nối AI MediaPipe Hands...',
+      };
     }
 
     return {
+      state: 'detecting_hand',
       gesture: 'none',
-      fingerCount,
-      label: detected !== 'none' ? `Giữ nguyên (${label})` : 'Sẵn sàng nhận diện',
-      confidence: 0.3,
-      box: { x: minX, y: minY, width: boxW, height: boxH },
+      previewCount: this.candidateFingerCount || 1,
+      isHandRaised: true,
+      consecutiveFrames: 0,
+      requiredFrames: this.REQUIRED_CONSECUTIVE_FRAMES,
+      confirmProgress: 0,
+      cooldownRemainingMs: 0,
+      confidence: 70,
+      label: '⏳ Đang khởi tạo AI nhận diện bàn tay MediaPipe...',
+      box: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
     };
   }
 }

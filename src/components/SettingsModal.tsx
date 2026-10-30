@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameshowSettings } from '../types';
 import { Settings, X, Volume2, Clock, Sparkles, Mic, Zap } from 'lucide-react';
 import { sound } from '../utils/soundEffects';
@@ -16,6 +16,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onUpdateSettings,
   onClose,
 }) => {
+  const [vietnameseVoices, setVietnameseVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    const updateVoices = () => {
+      const vi = sound.getVietnameseVoices();
+      setVietnameseVoices(vi);
+    };
+
+    updateVoices();
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
+
   if (!isOpen) return null;
 
   return (
@@ -196,31 +210,112 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Virtual MC Voice Toggle (TTS) */}
-          <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <Mic className="w-4 h-4" />
+          {/* Virtual MC Voice & Vietnamese Language Selector */}
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                  <Mic className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                    Giọng Đọc MC Ảo Tiếng Việt
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Tự động đọc to tên học sinh khi công bố
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                  Giọng Đọc MC Ảo Tiếng Việt
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Tự động đọc to tên học sinh khi công bố
-                </span>
-              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.enableTTS}
+                  onChange={(e) => onUpdateSettings({ ...settings, enableTTS: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500" />
+              </label>
             </div>
 
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.enableTTS}
-                onChange={(e) => onUpdateSettings({ ...settings, enableTTS: e.target.checked })}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500" />
-            </label>
+            {settings.enableTTS && (
+              <div className="pt-2.5 border-t border-slate-200/80 dark:border-slate-700/80 space-y-2.5">
+                {/* Voice Selection Dropdown */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                    🇻🇳 Chọn giọng đọc Tiếng Việt:
+                  </label>
+                  <select
+                    value={settings.voiceURI || ''}
+                    onChange={(e) => {
+                      const newURI = e.target.value;
+                      onUpdateSettings({ ...settings, voiceURI: newURI });
+                      sound.setPreferredVoice(newURI || null);
+                    }}
+                    className="w-full text-xs p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">✨ Tự động (Ưu tiên giọng Tiếng Việt tự nhiên nhất)</option>
+                    {vietnameseVoices.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        🇻🇳 {v.name} ({v.lang})
+                      </option>
+                    ))}
+                    {vietnameseVoices.length === 0 && (
+                      <option value="vi-VN">
+                        🇻🇳 Bộ đọc Tiếng Việt chuẩn hệ thống (vi-VN)
+                      </option>
+                    )}
+                  </select>
+                </div>
+
+                {/* Speed / Rate Selection */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                    Tốc độ đọc tên:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[
+                      { val: 0.9, label: '0.9x Chậm' },
+                      { val: 1.0, label: '1.0x Chuẩn' },
+                      { val: 1.15, label: '1.15x Nhanh' },
+                    ].map((spd) => (
+                      <button
+                        key={spd.val}
+                        type="button"
+                        onClick={() => {
+                          onUpdateSettings({ ...settings, voiceRate: spd.val });
+                          sound.setVoiceRate(spd.val);
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+                          (settings.voiceRate || 1.0) === spd.val
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {spd.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Test Voice Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.speakVirtualMC(
+                      'Ms Mèo xin chúc mừng bạn Nguyễn Minh Anh đã tỏa sáng!',
+                      settings.voiceURI,
+                      settings.voiceRate,
+                      settings.voicePitch
+                    );
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/20 active:scale-95"
+                >
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Nghe thử giọng đọc Tiếng Việt 🔊</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Performance Saver / Reduced Motion */}

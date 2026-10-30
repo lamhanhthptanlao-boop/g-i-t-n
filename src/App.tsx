@@ -39,6 +39,7 @@ import { CameraGesturePanel } from './components/CameraGesturePanel';
 import { SeatingMap } from './components/SeatingMap';
 import { SettingsModal } from './components/SettingsModal';
 import { GameshowSettings } from './types';
+import { launchMiniConfettiBurst } from './utils/celebrationEffects';
 
 import {
   Volume2,
@@ -135,6 +136,74 @@ export default function App() {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isBgmActive, setIsBgmActive] = useState<boolean>(false);
 
+  // Floating praise badges triggered by "Pháo tay"
+  const [praiseBadges, setPraiseBadges] = useState<Array<{ id: number; text: string; x: number; y: number }>>([]);
+
+  // Pháo tay khen ngợi học sinh tức thì (Confetti burst at mouse position + applause sound)
+  const handlePraiseConfetti = useCallback((e?: React.MouseEvent) => {
+    let clientX = typeof window !== 'undefined' ? window.innerWidth / 2 : 500;
+    let clientY = typeof window !== 'undefined' ? window.innerHeight / 2 : 400;
+
+    if (e && e.clientX && e.clientY) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    // 1. Launch crisp mini confetti burst right at mouse coordinates
+    launchMiniConfettiBurst(clientX, clientY);
+
+    // 2. Play celebratory applause + popper sound
+    sound.playApplausePopper();
+
+    // 3. Trigger haptic vibration on mobile
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate([40, 50, 40]);
+      } catch {
+        // Ignore
+      }
+    }
+
+    // 4. Floating cheerful encouragement text at cursor
+    const praiseList = [
+      '👏 Giỏi quá!',
+      '🌟 Xuất sắc!',
+      '💯 Điểm 10!',
+      '✨ Tuyệt vời!',
+      '🎉 Hoan hô!',
+      '🚀 Quá đỉnh!',
+    ];
+    const text = praiseList[Math.floor(Math.random() * praiseList.length)];
+    const badgeId = Date.now() + Math.random();
+    setPraiseBadges((prev) => [...prev, { id: badgeId, text, x: clientX, y: clientY }]);
+
+    setTimeout(() => {
+      setPraiseBadges((prev) => prev.filter((b) => b.id !== badgeId));
+    }, 1200);
+  }, []);
+
+  // Periodic suspense haptic feedback while picking
+  useEffect(() => {
+    if (!isPicking) return;
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate([40, 30, 40]);
+      } catch {
+        // Ignore
+      }
+    }
+    const interval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate(30);
+        } catch {
+          // Ignore
+        }
+      }
+    }, 220);
+    return () => clearInterval(interval);
+  }, [isPicking]);
+
   // 2. Persistence sync
   useEffect(() => {
     localStorage.setItem('classroom_magic_students', JSON.stringify(students));
@@ -158,6 +227,9 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('classroom_magic_settings', JSON.stringify(settings));
+    sound.setPreferredVoice(settings.voiceURI || null);
+    if (settings.voiceRate) sound.setVoiceRate(settings.voiceRate);
+    if (settings.voicePitch) sound.setVoicePitch(settings.voicePitch);
   }, [settings]);
 
   // Sound sync
@@ -188,39 +260,68 @@ export default function App() {
 
   // Primary Call Name Action with finger count support (1, 2, 3, 4, 5)
   const triggerPick = useCallback(
-    (count: number = 1) => {
+    (countArg?: number | unknown) => {
       if (isPicking) return; // Prevent double-triggering
+
+      // Robustly sanitize count: if an Event, undefined, or NaN is passed, fallback to 1
+      let count = 1;
+      if (typeof countArg === 'number' && !isNaN(countArg) && countArg >= 1) {
+        count = Math.floor(countArg);
+      } else if (typeof pickCount === 'number' && !isNaN(pickCount) && pickCount >= 1) {
+        count = Math.floor(pickCount);
+      }
 
       if (totalStudents === 0) {
         setShowManagerModal(true);
         return;
       }
 
+      // If user was on seating chart, switch to gameshow stage so the reveal animation displays
+      if (viewTab === 'seating') {
+        setViewTab('game');
+      }
+
       // Determine candidate pool based on mode
       let candidatePool = [...students];
       if (callMode === 'no_repeat') {
         if (uncalledStudents.length === 0) {
-          // All students called, notify teacher to reset or start new round
-          sound.playWinnerFanfare();
-          alert('Tất cả học sinh đều đã được gọi tên trong lượt này! Nhấn "Bắt đầu lượt mới" để tiếp tục.');
-          return;
+          // If all students have been called, seamlessly reset round and play sparkle
+          setStudents((prev) => prev.map((s) => ({ ...s, called: false })));
+          candidatePool = students.map((s) => ({ ...s, called: false }));
+          sound.playSparkle();
+        } else {
+          candidatePool = [...uncalledStudents];
         }
-        candidatePool = [...uncalledStudents];
+      }
+
+      // Safeguard: fallback to full student list if candidate pool is somehow empty
+      if (candidatePool.length === 0) {
+        candidatePool = [...students];
       }
 
       // Target count up to candidatePool length
-      const targetCount = Math.max(1, Math.min(count, candidatePool.length));
+      const targetCount = Math.max(1, Math.min(count, candidatePool.length || 1));
       setPickCount(targetCount);
 
       // Fair random selection of targetCount distinct students
       const shuffled = [...candidatePool].sort(() => 0.5 - Math.random());
-      const chosenStudents = shuffled.slice(0, targetCount);
+      let chosenStudents = shuffled.slice(0, targetCount);
 
-      setCurrentSelectedStudent(chosenStudents[0] || null);
+      if (chosenStudents.length === 0 && candidatePool.length > 0) {
+        chosenStudents = [candidatePool[Math.floor(Math.random() * candidatePool.length)]];
+      }
+
+      const primaryWinner = chosenStudents[0] || students[0] || null;
+      if (!primaryWinner) {
+        setShowManagerModal(true);
+        return;
+      }
+
+      setCurrentSelectedStudent(primaryWinner);
       setCurrentSelectedStudents(chosenStudents);
       setIsPicking(true);
     },
-    [isPicking, totalStudents, callMode, uncalledStudents, students]
+    [isPicking, totalStudents, callMode, uncalledStudents, students, pickCount, viewTab]
   );
 
   // Handler when animation ends
@@ -261,10 +362,18 @@ export default function App() {
     // Speak winner name(s) if enableTTS is enabled
     if (settings.enableTTS && gameMode !== 'virtual_mc') {
       if (chosenList.length === 1) {
-        sound.speakVirtualMC(`Xin chúc mừng bạn, ${chosenList[0].name}!`);
+        sound.speakVirtualMC(
+          `Xin chúc mừng bạn, ${chosenList[0].name}!`,
+          settings.voiceURI,
+          settings.voiceRate,
+          settings.voicePitch
+        );
       } else {
         sound.speakVirtualMC(
-          `Xin chúc mừng ${chosenList.length} bạn: ${chosenList.map((s) => s.name).join(', ')}!`
+          `Xin chúc mừng ${chosenList.length} bạn: ${chosenList.map((s) => s.name).join(', ')}!`,
+          settings.voiceURI,
+          settings.voiceRate,
+          settings.voicePitch
         );
       }
     }
@@ -274,7 +383,26 @@ export default function App() {
 
     // Show celebration modal
     setShowWinnerModal(true);
-  }, [currentSelectedStudents, currentSelectedStudent, gameMode, history.length, settings.enableTTS]);
+  }, [
+    currentSelectedStudents,
+    currentSelectedStudent,
+    gameMode,
+    history.length,
+    settings.enableTTS,
+    settings.voiceURI,
+    settings.voiceRate,
+    settings.voicePitch,
+  ]);
+
+  // Safety watchdog: ensure isPicking never gets permanently stuck
+  useEffect(() => {
+    if (!isPicking) return;
+    const maxSafetyDurationMs = Math.max(7500, ((settings.duration || 4) + 3) * 1000);
+    const timeout = setTimeout(() => {
+      handlePickAnimationEnd();
+    }, maxSafetyDurationMs);
+    return () => clearTimeout(timeout);
+  }, [isPicking, settings.duration, handlePickAnimationEnd]);
 
   // Undo last call
   const handleUndoLastCall = useCallback(() => {
@@ -445,12 +573,25 @@ export default function App() {
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
           </button>
 
-          {/* Camera Gesture Module */}
-          <CameraGesturePanel
-            onTriggerPick={triggerPick}
-            onSelectMode={(m) => setGameMode(m)}
-            onPause={() => setIsPicking(false)}
-          />
+          {/* Nút Pháo tay (Confetti Burst khen ngợi học sinh tức thì tại chuột) */}
+          <button
+            onClick={(e) => handlePraiseConfetti(e)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 active:scale-95 text-white font-bold text-xs shadow-md shadow-pink-500/25 transition-all hover:scale-105 ring-2 ring-pink-300/40"
+            title="Bấm để bắn pháo tay khen ngợi học sinh tại vị trí chuột mà không cần gọi tên!"
+          >
+            <span className="text-base animate-pulse">👏</span>
+            <span className="hidden sm:inline">Pháo tay</span>
+            <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
+          </button>
+
+          {/* Camera Gesture Module for floating overlay (only active in non-camera modes) */}
+          {gameMode !== 'camera_gesture' && (
+            <CameraGesturePanel
+              onTriggerPick={triggerPick}
+              onSelectMode={(m) => setGameMode(m)}
+              onPause={() => setIsPicking(false)}
+            />
+          )}
 
           {/* Student Roster Button */}
           <button
@@ -851,20 +992,32 @@ export default function App() {
 
         {/* Primary Call Action Button & Live Counters Strip */}
         <div className="w-full max-w-xl mx-auto flex flex-col items-center gap-3 my-4">
-          {/* Main "GỌI TÊN NGAY!" CTA */}
-          <button
-            onClick={triggerPick}
-            disabled={isPicking || totalStudents === 0}
-            className={`w-full max-w-md py-4 sm:py-5 px-8 rounded-3xl font-black text-xl sm:text-2xl tracking-wider text-white shadow-2xl transition-all duration-200 transform ${
-              isPicking
-                ? 'bg-slate-400 cursor-not-allowed scale-95'
-                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 hover:scale-105 active:scale-95 shadow-amber-500/50 ring-4 ring-amber-300'
-            } flex items-center justify-center gap-3`}
-          >
-            <Play className={`w-7 h-7 fill-white ${isPicking ? 'animate-spin' : ''}`} />
-            <span>{isPicking ? 'ĐANG QUAY TÊN...' : 'GỌI TÊN NGAY!'}</span>
-            <Sparkles className="w-6 h-6 text-yellow-200 animate-pulse" />
-          </button>
+          <div className="w-full flex items-center justify-center gap-2 sm:gap-3 max-w-lg">
+            {/* Main "GỌI TÊN NGAY!" CTA with Suspense Vibration Effect */}
+            <button
+              onClick={() => triggerPick(pickCount)}
+              disabled={isPicking || totalStudents === 0}
+              className={`flex-1 py-4 sm:py-5 px-6 sm:px-8 rounded-3xl font-black text-xl sm:text-2xl tracking-wider text-white shadow-2xl transition-all duration-150 transform select-none ${
+                isPicking
+                  ? 'bg-gradient-to-r from-orange-600 via-rose-600 to-amber-600 animate-vibrate shadow-rose-500/60 ring-4 ring-rose-400 scale-98 cursor-wait'
+                  : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 hover:scale-105 active:scale-95 shadow-amber-500/50 ring-4 ring-amber-300 animate-idle-shake'
+              } flex items-center justify-center gap-3`}
+            >
+              <Play className={`w-7 h-7 fill-white ${isPicking ? 'animate-spin' : ''}`} />
+              <span>{isPicking ? 'ĐANG QUAY TÊN...' : 'GỌI TÊN NGAY!'}</span>
+              <Sparkles className="w-6 h-6 text-yellow-200 animate-pulse" />
+            </button>
+
+            {/* Quick Confetti & Praise Button ("Pháo tay khen ngợi học sinh") */}
+            <button
+              onClick={(e) => handlePraiseConfetti(e)}
+              className="py-3.5 sm:py-4 px-3 sm:px-4 rounded-3xl bg-gradient-to-b from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 active:scale-90 text-white font-black shadow-lg shadow-pink-500/30 ring-3 ring-pink-300/60 transition-all flex flex-col items-center justify-center gap-0.5 shrink-0"
+              title="Pháo tay khen ngợi học sinh tức thì tại vị trí chuột (không cần gọi tên)!"
+            >
+              <span className="text-2xl sm:text-3xl animate-bounce">👏</span>
+              <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-yellow-100">Pháo tay</span>
+            </button>
+          </div>
 
           <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
             Mẹo: Nhấn phím <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Space</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Enter</kbd> trên bàn phím để gọi tên ngay!
@@ -941,11 +1094,15 @@ export default function App() {
       <WinnerModal
         isOpen={showWinnerModal}
         student={currentSelectedStudent}
+        students={currentSelectedStudents}
         totalStudents={totalStudents}
         calledCount={calledCount}
         remainingCount={remainingCount}
         callNumber={history.length}
         enableTTS={settings.enableTTS}
+        voiceURI={settings.voiceURI}
+        voiceRate={settings.voiceRate}
+        voicePitch={settings.voicePitch}
         fireworksSpeed={settings.fireworksSpeed || 'normal'}
         fireworksDuration={settings.fireworksDuration || 5}
         onUpdateFireworksSettings={(newSpeed, newDuration) => {
@@ -955,7 +1112,7 @@ export default function App() {
             fireworksDuration: newDuration,
           }));
         }}
-        onNext={triggerPick}
+        onNext={() => triggerPick(pickCount)}
         onUndo={handleUndoLastCall}
         onResetRound={handleResetRound}
         onClose={() => {
@@ -987,6 +1144,17 @@ export default function App() {
         onUpdateSettings={setSettings}
         onClose={() => setShowSettingsModal(false)}
       />
+
+      {/* Floating praise badges (displayed upon clicking "Pháo tay") */}
+      {praiseBadges.map((badge) => (
+        <div
+          key={badge.id}
+          style={{ left: badge.x, top: badge.y }}
+          className="fixed z-[999999] pointer-events-none transform -translate-x-1/2 -translate-y-full px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-400 via-pink-500 to-rose-500 text-white font-black text-base shadow-2xl shadow-pink-500/50 border-2 border-white animate-launch-up whitespace-nowrap flex items-center gap-1.5"
+        >
+          <span>{badge.text}</span>
+        </div>
+      ))}
     </div>
   );
 }

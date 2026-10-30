@@ -35,6 +35,9 @@ export interface GameshowSettings {
   reducedMotion: boolean;
   fireworksSpeed: FireworksSpeed; // 'slow' (0.7x), 'normal' (1.0x), 'fast' (1.4x), 'super' (2.0x)
   fireworksDuration: number; // 3, 5, 8, 12 seconds
+  voiceURI?: string; // Selected Vietnamese voice URI
+  voiceRate?: number; // 0.85, 1.0, 1.15
+  voicePitch?: number; // 0.9, 1.0, 1.1
 }
 
 export type CallMode = 'no_repeat' | 'allow_repeat';

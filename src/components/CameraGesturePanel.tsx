@@ -25,7 +25,10 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isActive, setIsActive] = useState<boolean>(false);
   const [isMinimized, setIsMinimized] = useState<boolean>(false);
-  const [currentGesture, setCurrentGesture] = useState<string>('Sẵn sàng');
+  const [currentGesture, setCurrentGesture] = useState<string>('✋ Chưa dơ tay – Hãy giơ 1-5 ngón tay');
+  const [isHandRaised, setIsHandRaised] = useState<boolean>(false);
+  const [holdProgress, setHoldProgress] = useState<number>(0);
+  const [cameraState, setCameraState] = useState<string>('no_hand');
   const [recentAction, setRecentAction] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [facing, setFacing] = useState<'user' | 'environment'>('user');
@@ -34,25 +37,24 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
   const handleGestureResult = useCallback(
     (res: GestureDetectionResult) => {
       setCurrentGesture(res.label);
+      setIsHandRaised(res.isHandRaised);
+      setHoldProgress(res.confirmProgress);
+      setCameraState(res.state);
+
+      // ONLY INTERACT WHEN STATE IS STRICTLY 'confirmed'
+      if (res.state !== 'confirmed' || !res.isHandRaised) {
+        return;
+      }
 
       if (res.fingerCount && res.fingerCount >= 1 && res.fingerCount <= 5) {
-        setRecentAction(`🖐️ Giơ ${res.fingerCount} ngón tay -> Chọn ${res.fingerCount} học sinh!`);
+        setRecentAction(`🖐️ Giơ ${res.fingerCount} ngón tay -> Đã chọn ${res.fingerCount} học sinh!`);
         onTriggerPick(res.fingerCount);
       } else if (res.gesture === 'wave') {
         setRecentAction('👋 Nhận diện VẪY TAY -> Chọn 1 bạn!');
         onTriggerPick(1);
-      } else if (res.gesture === 'thumbs_up') {
-        setRecentAction('👍 Nhận diện NGÓN CÁI -> Chọn 1 bạn!');
-        onTriggerPick(1);
-      } else if (res.gesture === 'open_palm') {
-        setRecentAction('✋ Nhận diện BÀN TAY MỞ -> Tạm dừng!');
-        onPause();
-      } else if (res.gesture === 'fist') {
-        setRecentAction('✊ Nhận diện NẮM TAY -> Khởi động chọn!');
-        onTriggerPick(1);
       }
     },
-    [onTriggerPick, onSelectMode, onPause]
+    [onTriggerPick]
   );
 
   useEffect(() => {
@@ -153,8 +155,36 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
               className="w-full h-full object-cover transform scale-x-[-1]"
             />
 
+            {/* Hand Raised & Hold Progress Status Overlay */}
+            <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs border ${
+                  isHandRaised
+                    ? 'bg-emerald-500/90 text-white border-emerald-300 animate-pulse'
+                    : 'bg-slate-900/80 text-amber-300 border-amber-400/40'
+                }`}
+              >
+                {isHandRaised ? '✋ ĐÃ DƠ TAY' : '✋ CHƯA DƠ TAY'}
+              </span>
+              {holdProgress > 0 && holdProgress < 1 && (
+                <span className="px-1.5 py-0.5 rounded bg-indigo-600/90 text-white text-[10px] font-mono font-bold">
+                  {Math.round(holdProgress * 100)}%
+                </span>
+              )}
+            </div>
+
+            {/* Hold progress bar */}
+            {holdProgress > 0 && holdProgress < 1 && (
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-slate-800">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-75"
+                  style={{ width: `${Math.round(holdProgress * 100)}%` }}
+                />
+              </div>
+            )}
+
             {/* Gesture feedback banner */}
-            <div className="absolute bottom-2 inset-x-2 bg-slate-950/80 backdrop-blur-xs rounded-lg px-2.5 py-1 text-center text-[11px] font-bold text-amber-300 truncate border border-amber-400/40">
+            <div className="absolute bottom-2 inset-x-2 bg-slate-950/85 backdrop-blur-xs rounded-lg px-2.5 py-1 text-center text-[11px] font-bold text-amber-300 truncate border border-amber-400/40">
               {currentGesture}
             </div>
           </div>
@@ -171,17 +201,21 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
 
               {showGuide && (
                 <div className="p-2 rounded-lg bg-slate-800/80 text-[11px] text-slate-300 space-y-1">
-                  <div className="font-bold text-amber-300">Hướng dẫn cử chỉ bàn tay:</div>
-                  <div>👋 <strong>Vẫy tay:</strong> Quay vòng quay ngay</div>
-                  <div>👍 <strong>Ngón cái:</strong> Bắt đầu chọn học sinh</div>
-                  <div>✋ <strong>Bàn tay mở:</strong> Tạm dừng</div>
-                  <div>✌️ <strong>Dấu V:</strong> Đổi sang Hộp quà</div>
-                  <div>✊ <strong>Nắm tay:</strong> Bắt đầu đếm ngược</div>
+                  <div className="font-bold text-amber-300">Quy tắc nhận diện cử chỉ:</div>
+                  <div>☝️ <strong>Giơ 1 ngón:</strong> Chọn 1 học sinh</div>
+                  <div>✌️ <strong>Giơ 2 ngón:</strong> Chọn 2 học sinh</div>
+                  <div>🤟 <strong>Giơ 3 ngón:</strong> Chọn 3 học sinh</div>
+                  <div>🖖 <strong>Giơ 4 ngón:</strong> Chọn 4 học sinh</div>
+                  <div>🖐️ <strong>Giơ 5 ngón:</strong> Chọn 5 học sinh</div>
+                  <div>👋 <strong>Vẫy tay:</strong> Chọn 1 học sinh</div>
+                  <div className="text-[10px] text-amber-200 italic mt-1">
+                    * Chỉ khi thầy/cô dơ tay lên và giữ yên 0.5s thì máy mới tương tác!
+                  </div>
                 </div>
               )}
 
               <div className="text-[10px] text-slate-400 flex items-center justify-between">
-                <span>Giơ tay trước camera 1-2m</span>
+                <span>Chỉ tương tác khi dơ tay</span>
                 <span className="text-amber-400 font-mono">Camera: {facing}</span>
               </div>
             </div>

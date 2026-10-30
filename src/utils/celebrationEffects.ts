@@ -118,3 +118,53 @@ export function launchGrandCelebrationFireworks() {
     }, 200);
   }, 900);
 }
+
+/**
+ * Small Confetti Burst at mouse/touch position (or center of viewport)
+ * Designed for immediate teacher praise & applause ("Pháo tay khen ngợi")
+ */
+export function launchMiniConfettiBurst(clientX?: number, clientY?: number) {
+  // Convert screen pixel coordinates to normalized 0.0 - 1.0 range required by canvas-confetti
+  const winW = typeof window !== 'undefined' ? window.innerWidth : 1000;
+  const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
+
+  let normX = 0.5;
+  let normY = 0.5;
+
+  if (clientX !== undefined && clientX > 0 && winW > 0) {
+    normX = Math.max(0.05, Math.min(0.95, clientX / winW));
+  }
+  if (clientY !== undefined && clientY > 0 && winH > 0) {
+    normY = Math.max(0.05, Math.min(0.95, clientY / winH));
+  }
+
+  // Primary burst from cursor
+  confetti({
+    particleCount: 50,
+    spread: 80,
+    startVelocity: 35,
+    origin: { x: normX, y: normY },
+    colors: ['#FF6B8B', '#FFD166', '#06D6A0', '#118AB2', '#8338EC', '#FFB703', '#FF4D6D', '#FFD700'],
+    zIndex: 999999,
+    scalar: 1,
+    ticks: 150,
+    disableForReducedMotion: false,
+  });
+
+  // Secondary shimmer stars puff
+  setTimeout(() => {
+    confetti({
+      particleCount: 25,
+      spread: 110,
+      startVelocity: 22,
+      origin: { x: normX, y: normY },
+      shapes: ['circle'],
+      colors: ['#FFD700', '#FFFFFF', '#00F5D4', '#FFAA00'],
+      zIndex: 999999,
+      scalar: 1.2,
+      ticks: 120,
+      disableForReducedMotion: false,
+    });
+  }, 90);
+}
+

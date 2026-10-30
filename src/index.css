@@ -98,8 +98,21 @@ body {
     animation: launchUp 1.5s ease-in forwards;
   }
 
+  @keyframes vibrateButton {
+    0% { transform: translate(0) scale(0.98); }
+    20% { transform: translate(-2px, 2px) scale(0.99); }
+    40% { transform: translate(-2px, -2px) scale(0.98); }
+    60% { transform: translate(2px, 2px) scale(0.99); }
+    80% { transform: translate(2px, -2px) scale(0.98); }
+    100% { transform: translate(0) scale(0.98); }
+  }
+
   .animate-suspense-shake {
     animation: suspenseShake 0.22s ease-in-out infinite;
+  }
+
+  .animate-vibrate {
+    animation: vibrateButton 0.1s linear infinite;
   }
 
   .animate-idle-shake {

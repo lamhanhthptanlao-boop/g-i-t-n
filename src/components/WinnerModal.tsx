@@ -16,6 +16,9 @@ interface WinnerModalProps {
   enableTTS?: boolean;
   fireworksSpeed?: FireworksSpeed;
   fireworksDuration?: number;
+  voiceURI?: string;
+  voiceRate?: number;
+  voicePitch?: number;
   onUpdateFireworksSettings?: (speed: FireworksSpeed, duration: number) => void;
   onNext: () => void;
   onUndo: () => void;
@@ -34,6 +37,9 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
   enableTTS = true,
   fireworksSpeed = 'normal',
   fireworksDuration = 5,
+  voiceURI,
+  voiceRate,
+  voicePitch,
   onUpdateFireworksSettings,
   onNext,
   onUndo,
@@ -55,13 +61,18 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
 
       if (enableTTS) {
         if (displayList.length === 1) {
-          sound.speakVirtualMC(`Ms Mèo xin chúc mừng học sinh ${displayList[0].name}!`);
+          sound.speakVirtualMC(`Ms Mèo xin chúc mừng học sinh ${displayList[0].name}!`, voiceURI, voiceRate, voicePitch);
         } else {
-          sound.speakVirtualMC(`Ms Mèo xin chúc mừng ${displayList.length} bạn: ${displayList.map(s => s.name).join(', ')}!`);
+          sound.speakVirtualMC(
+            `Ms Mèo xin chúc mừng ${displayList.length} bạn: ${displayList.map((s) => s.name).join(', ')}!`,
+            voiceURI,
+            voiceRate,
+            voicePitch
+          );
         }
       }
     }
-  }, [isOpen, displayList.length, enableTTS]);
+  }, [isOpen, displayList.length, enableTTS, voiceURI, voiceRate, voicePitch]);
 
   if (!isOpen || displayList.length === 0) return null;
 
@@ -116,9 +127,16 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
                 Học sinh được gọi tên
               </span>
               <button
-                onClick={() => sound.speakVirtualMC(`Xin chúc mừng học sinh ${displayList[0].name}!`)}
+                onClick={() =>
+                  sound.speakVirtualMC(
+                    `Xin chúc mừng học sinh ${displayList[0].name}!`,
+                    voiceURI,
+                    voiceRate,
+                    voicePitch
+                  )
+                }
                 className="p-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-slate-700 text-amber-700 dark:text-amber-300 transition-colors flex items-center gap-1 text-[11px] font-bold"
-                title="Đọc lại tên học sinh"
+                title="Đọc lại tên học sinh bằng giọng Tiếng Việt"
               >
                 <Volume2 className="w-3.5 h-3.5" />
                 <span>Đọc tên</span>
@@ -137,10 +155,15 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
               </div>
               <button
                 onClick={() =>
-                  sound.speakVirtualMC(`Xin chúc mừng các bạn: ${displayList.map((s) => s.name).join(', ')}!`)
+                  sound.speakVirtualMC(
+                    `Xin chúc mừng các bạn: ${displayList.map((s) => s.name).join(', ')}!`,
+                    voiceURI,
+                    voiceRate,
+                    voicePitch
+                  )
                 }
                 className="p-1.5 px-2.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-slate-700 text-amber-700 dark:text-amber-300 transition-colors flex items-center gap-1 text-[11px] font-bold"
-                title="Đọc tên tất cả học sinh trong đội"
+                title="Đọc tên tất cả học sinh trong đội bằng giọng Tiếng Việt"
               >
                 <Volume2 className="w-3.5 h-3.5" />
                 <span>Đọc cả đội</span>
@@ -161,7 +184,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
                     </span>
                   </div>
                   <button
-                    onClick={() => sound.speakVirtualMC(`Bạn ${st.name}`)}
+                    onClick={() => sound.speakVirtualMC(`Bạn ${st.name}`, voiceURI, voiceRate, voicePitch)}
                     className="p-1 text-slate-400 hover:text-amber-600 transition-colors shrink-0"
                     title={`Đọc tên bạn ${st.name}`}
                   >

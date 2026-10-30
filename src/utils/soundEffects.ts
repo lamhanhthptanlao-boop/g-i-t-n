@@ -11,6 +11,63 @@ class SoundEngine {
   private bgmGain: GainNode | null = null;
   private isBgmPlaying: boolean = false;
 
+  private voices: SpeechSynthesisVoice[] = [];
+  private selectedVoiceURI: string | null = null;
+  private voiceRate: number = 1.0;
+  private voicePitch: number = 1.05;
+
+  constructor() {
+    this.initVoices();
+  }
+
+  private initVoices() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      this.voices = window.speechSynthesis.getVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.voices = window.speechSynthesis.getVoices();
+        };
+      }
+    }
+  }
+
+  public getAvailableVoices(): SpeechSynthesisVoice[] {
+    if (this.voices.length === 0 && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      this.voices = window.speechSynthesis.getVoices();
+    }
+    return this.voices;
+  }
+
+  public getVietnameseVoices(): SpeechSynthesisVoice[] {
+    const all = this.getAvailableVoices();
+    return all.filter(
+      (v) =>
+        v.lang.toLowerCase().includes('vi') ||
+        v.lang.toLowerCase().includes('vn') ||
+        v.name.toLowerCase().includes('vietnam') ||
+        v.name.toLowerCase().includes('tiếng việt') ||
+        v.name.toLowerCase().includes('hoaimy') ||
+        v.name.toLowerCase().includes('namminh') ||
+        v.name.toLowerCase().includes('linh')
+    );
+  }
+
+  public setPreferredVoice(uri: string | null) {
+    this.selectedVoiceURI = uri;
+  }
+
+  public getPreferredVoice(): string | null {
+    return this.selectedVoiceURI;
+  }
+
+  public setVoiceRate(rate: number) {
+    this.voiceRate = Math.max(0.7, Math.min(1.4, rate));
+  }
+
+  public setVoicePitch(pitch: number) {
+    this.voicePitch = Math.max(0.7, Math.min(1.4, pitch));
+  }
+
   private initContext() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -700,28 +757,63 @@ class SoundEngine {
   }
 
   /**
-   * Virtual MC Speech in Vietnamese using Web Speech API
+   * Virtual MC Speech in Vietnamese using Web Speech API with explicit Vietnamese voice priority
    */
-  public speakVirtualMC(text: string) {
-    if (this.isMuted || !('speechSynthesis' in window)) return;
+  public speakVirtualMC(
+    text: string,
+    voiceURIOverride?: string,
+    rateOverride?: number,
+    pitchOverride?: number
+  ) {
+    if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = 'vi-VN';
-      utter.rate = 1.05;
-      utter.pitch = 1.05;
-      utter.volume = this.volume;
+      utter.rate = rateOverride || this.voiceRate || 1.0;
+      utter.pitch = pitchOverride || this.voicePitch || 1.05;
+      utter.volume = Math.max(0.1, this.volume);
 
-      // Try to find a Vietnamese voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const viVoice = voices.find((v) => v.lang.includes('vi') || v.lang.includes('VN'));
-      if (viVoice) {
-        utter.voice = viVoice;
+      const targetURI = voiceURIOverride || this.selectedVoiceURI;
+      const allVoices = this.getAvailableVoices();
+
+      let matchedVoice: SpeechSynthesisVoice | undefined;
+
+      // 1. Try matching explicit user-selected voice URI
+      if (targetURI) {
+        matchedVoice = allVoices.find((v) => v.voiceURI === targetURI);
+      }
+
+      // 2. If no voice or voice is not Vietnamese, look for Vietnamese voices
+      if (
+        !matchedVoice ||
+        (!matchedVoice.lang.toLowerCase().includes('vi') &&
+          !matchedVoice.lang.toLowerCase().includes('vn'))
+      ) {
+        const viVoices = this.getVietnameseVoices();
+        if (viVoices.length > 0) {
+          // Prefer natural/neural/online voices (Google Tiếng Việt, Microsoft HoaiMy, Microsoft NamMinh, Linh)
+          matchedVoice =
+            viVoices.find(
+              (v) =>
+                v.name.includes('Online') ||
+                v.name.includes('Natural') ||
+                v.name.includes('Google') ||
+                v.name.includes('HoaiMy') ||
+                v.name.includes('NamMinh') ||
+                v.name.includes('Linh')
+            ) || viVoices[0];
+        }
+      }
+
+      if (matchedVoice) {
+        utter.voice = matchedVoice;
+        utter.lang = matchedVoice.lang || 'vi-VN';
       }
 
       window.speechSynthesis.speak(utter);
     } catch {
-      // Ignore
+      // Audio autoplay or TTS handled gracefully
     }
   }
 
@@ -789,6 +881,51 @@ class SoundEngine {
       sparkleGain.connect(ctx.destination);
       sparkleOsc.start(ctx.currentTime + 0.05);
       sparkleOsc.stop(ctx.currentTime + 0.3);
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Party popper pop & applause cheer for teacher praise ("Pháo tay khen ngợi")
+   */
+  public playApplausePopper() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      // Popper pop
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(650, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.12);
+
+      gain.gain.setValueAtTime(0.4 * this.volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.13);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.13);
+
+      // Clapping sequence (3 rapid, rhythmic hand claps)
+      [0.08, 0.18, 0.28].forEach((delay) => {
+        const clapOsc = ctx.createOscillator();
+        const clapGain = ctx.createGain();
+        clapOsc.type = 'sine';
+        clapOsc.frequency.setValueAtTime(900 + Math.random() * 300, ctx.currentTime + delay);
+        clapOsc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + delay + 0.06);
+
+        clapGain.gain.setValueAtTime(0.2 * this.volume, ctx.currentTime + delay);
+        clapGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.06);
+
+        clapOsc.connect(clapGain);
+        clapGain.connect(ctx.destination);
+        clapOsc.start(ctx.currentTime + delay);
+        clapOsc.stop(ctx.currentTime + delay + 0.06);
+      });
+
+      this.playSparkle();
     } catch {
       // Ignore
     }
