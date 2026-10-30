@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Compatibility shim: Ensure window.fetch is writable and has a setter so extensions can safely hook into it
+      (function() {
+        try {
+          const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+          let activeFetch = originalFetch;
+          Object.defineProperty(window, 'fetch', {
+            get: function() { return activeFetch; },
+            set: function(val) { activeFetch = val; },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (_) {}
+      })();
+    </script>
+    <title>Classroom Magic – Vòng Quay May Mắn & Gameshow Lớp Học</title>
+    <meta name="description" content="Ứng dụng gọi tên học sinh ngẫu nhiên cùng cô giáo Ms Mèo, logo Mèo cute, 10 kiểu gameshow truyền hình, 5 trò dân gian 3D, camera cử chỉ và pháo hoa rực rỡ toàn màn hình." />
+    <meta property="og:title" content="Classroom Magic – Vòng Quay May Mắn & Gameshow Lớp Học" />
+    <meta property="og:description" content="Ứng dụng gọi tên học sinh ngẫu nhiên cùng cô giáo Ms Mèo, logo Mèo cute, 10 kiểu gameshow truyền hình, 5 trò dân gian 3D, camera cử chỉ và pháo hoa rực rỡ toàn màn hình." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <!-- MediaPipe Hands for ultra-stable, real-time AI hand landmark & finger tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script type="module" crossorigin src="./assets/index-Cx2pEw1c.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-yLyrPMSL.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+
