@@ -758,6 +758,7 @@ class SoundEngine {
 
   /**
    * Virtual MC Speech in Vietnamese using Web Speech API with explicit Vietnamese voice priority
+   * and NFC diacritic normalization for clear tone pronunciation (sắc, huyền, hỏi, ngã, nặng).
    */
   public speakVirtualMC(
     text: string,
@@ -768,10 +769,21 @@ class SoundEngine {
     if (this.isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
+
+      // Normalize Vietnamese text (NFC Unicode, expand abbreviations, remove obstructive emojis)
+      const normalized = text
+        .normalize('NFC')
+        .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, ' ')
+        .replace(/\bHS\b/gi, 'học sinh')
+        .replace(/\bSTT\b/gi, 'số thứ tự')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const utter = new SpeechSynthesisUtterance(normalized);
       utter.lang = 'vi-VN';
-      utter.rate = rateOverride || this.voiceRate || 1.0;
-      utter.pitch = pitchOverride || this.voicePitch || 1.05;
+      // Rate 0.95 gives optimal clarity for Vietnamese tones without rushing
+      utter.rate = rateOverride || this.voiceRate || 0.96;
+      utter.pitch = pitchOverride || this.voicePitch || 1.02;
       utter.volume = Math.max(0.1, this.volume);
 
       const targetURI = voiceURIOverride || this.selectedVoiceURI;
@@ -792,17 +804,14 @@ class SoundEngine {
       ) {
         const viVoices = this.getVietnameseVoices();
         if (viVoices.length > 0) {
-          // Prefer natural/neural/online voices (Google Tiếng Việt, Microsoft HoaiMy, Microsoft NamMinh, Linh)
+          // Priority order: Natural/Online/Neural (Hoài My, Nam Minh, An, Google Tiếng Việt, Linh)
           matchedVoice =
-            viVoices.find(
-              (v) =>
-                v.name.includes('Online') ||
-                v.name.includes('Natural') ||
-                v.name.includes('Google') ||
-                v.name.includes('HoaiMy') ||
-                v.name.includes('NamMinh') ||
-                v.name.includes('Linh')
-            ) || viVoices[0];
+            viVoices.find((v) => v.name.includes('HoaiMy') || v.name.includes('Hoài My')) ||
+            viVoices.find((v) => v.name.includes('NamMinh') || v.name.includes('Nam Minh')) ||
+            viVoices.find((v) => v.name.includes('Google') || v.name.toLowerCase().includes('tiếng việt')) ||
+            viVoices.find((v) => v.name.includes('Natural') || v.name.includes('Online')) ||
+            viVoices.find((v) => v.name.includes('Linh')) ||
+            viVoices[0];
         }
       }
 

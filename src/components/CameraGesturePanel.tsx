@@ -8,19 +8,23 @@ import {
   Maximize2,
   Sparkles,
   HelpCircle,
-  Eye,
+  Home,
+  X,
 } from 'lucide-react';
+import { sound } from '../utils/soundEffects';
 
 interface CameraGesturePanelProps {
   onTriggerPick: (count?: number) => void;
   onSelectMode: (mode: 'gift' | 'wheel') => void;
   onPause: () => void;
+  onReturnHome?: () => void;
 }
 
 export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
   onTriggerPick,
   onSelectMode,
   onPause,
+  onReturnHome,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isActive, setIsActive] = useState<boolean>(false);
@@ -73,12 +77,43 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
     }
   };
 
-  const stopCamera = () => {
+  const stopCamera = useCallback(() => {
     gestureDetector.stopCamera();
+    if (videoRef.current && videoRef.current.srcObject) {
+      try {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => {
+          track.stop();
+          track.enabled = false;
+        });
+        videoRef.current.srcObject = null;
+      } catch (e) {
+        console.warn('Error closing stream in CameraGesturePanel:', e);
+      }
+    }
     setIsActive(false);
     setCurrentGesture('Đã tắt camera');
     setRecentAction(null);
-  };
+    sound.playSparkle();
+    if (onReturnHome) {
+      onReturnHome();
+    }
+  }, [onReturnHome]);
+
+  // Clean up stream on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        try {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach((track) => track.stop());
+          videoRef.current.srcObject = null;
+        } catch {
+          // Ignore
+        }
+      }
+    };
+  }, []);
 
   const toggleFacing = async () => {
     if (!videoRef.current) return;
@@ -101,20 +136,30 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
         </button>
       ) : (
         <div
-          className={`fixed z-40 transition-all duration-300 shadow-2xl rounded-2xl border-2 border-amber-400 bg-slate-900 overflow-hidden ${
+          className={`fixed z-40 transition-all duration-300 shadow-2xl rounded-2xl border-2 border-indigo-400 bg-slate-900 overflow-hidden ${
             isMinimized
-              ? 'bottom-4 right-4 w-32 h-32'
+              ? 'bottom-4 right-4 w-36 h-36'
               : 'bottom-4 right-4 w-72 sm:w-80'
           }`}
         >
           {/* Header Bar */}
-          <div className="flex items-center justify-between px-3 py-2 bg-slate-950 text-white text-xs">
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-950 text-white text-xs border-b border-slate-800">
             <div className="flex items-center gap-1.5 font-bold truncate">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>Camera Cử Chỉ</span>
             </div>
 
             <div className="flex items-center gap-1">
+              {onReturnHome && (
+                <button
+                  onClick={stopCamera}
+                  className="p-1 text-yellow-300 hover:text-white flex items-center gap-0.5 text-[10px] font-bold"
+                  title="Thoát về trang chủ"
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Trang chủ</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowGuide(!showGuide)}
                 className="p-1 text-slate-400 hover:text-white"
@@ -138,10 +183,10 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
               </button>
               <button
                 onClick={stopCamera}
-                className="p-1 text-rose-400 hover:text-rose-300"
-                title="Tắt camera"
+                className="p-1 text-rose-400 hover:text-rose-200 rounded hover:bg-rose-950/50"
+                title="Tắt camera và thoát"
               >
-                <CameraOff className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -155,8 +200,20 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
               className="w-full h-full object-cover transform scale-x-[-1]"
             />
 
+            {/* Persistent Home & Close button overlay */}
+            <div className="absolute top-2 right-2 flex items-center gap-1 z-20">
+              <button
+                onClick={stopCamera}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-900/80 hover:bg-black text-white text-[10px] font-bold border border-white/30 backdrop-blur shadow-md active:scale-95"
+                title="Đóng camera và trở về trang chủ"
+              >
+                <Home className="w-3 h-3 text-yellow-300" />
+                <X className="w-3 h-3 text-rose-400" />
+              </button>
+            </div>
+
             {/* Hand Raised & Hold Progress Status Overlay */}
-            <div className="absolute top-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+            <div className="absolute top-2 left-2 flex items-center gap-1 pointer-events-none">
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold shadow-xs border ${
                   isHandRaised
@@ -209,14 +266,20 @@ export const CameraGesturePanel: React.FC<CameraGesturePanelProps> = ({
                   <div>🖐️ <strong>Giơ 5 ngón:</strong> Chọn 5 học sinh</div>
                   <div>👋 <strong>Vẫy tay:</strong> Chọn 1 học sinh</div>
                   <div className="text-[10px] text-amber-200 italic mt-1">
-                    * Chỉ khi thầy/cô dơ tay lên và giữ yên 0.5s thì máy mới tương tác!
+                    * Chỉ khi thầy/cô dơ tay lên và giữ yên 8 frame thì máy mới tương tác!
                   </div>
                 </div>
               )}
 
               <div className="text-[10px] text-slate-400 flex items-center justify-between">
                 <span>Chỉ tương tác khi dơ tay</span>
-                <span className="text-amber-400 font-mono">Camera: {facing}</span>
+                <button
+                  onClick={stopCamera}
+                  className="text-amber-400 hover:underline font-bold text-[10px] flex items-center gap-1"
+                >
+                  <Home className="w-3 h-3" />
+                  <span>Về trang chủ</span>
+                </button>
               </div>
             </div>
           )}

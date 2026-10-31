@@ -102,7 +102,7 @@ export const HighSpeedReel: React.FC<HighSpeedReelProps> = ({
                 : 'text-slate-300'
             }`}
           >
-            <h1 className="text-2xl sm:text-4xl font-black font-mono tracking-tight truncate max-w-[340px]">
+            <h1 className="text-xl sm:text-3xl font-black font-mono tracking-tight whitespace-normal break-words max-w-md px-2 leading-tight">
               {currentDisplay}
             </h1>
           </div>

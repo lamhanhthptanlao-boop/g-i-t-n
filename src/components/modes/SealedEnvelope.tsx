@@ -68,7 +68,7 @@ export const SealedEnvelope: React.FC<SealedEnvelopeProps> = ({
           <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block">
             ✨ Ngôi sao được xướng tên
           </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1 truncate">
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 mt-1 whitespace-normal break-words leading-tight px-1">
             {selectedStudent?.name || 'Học sinh'}
           </h2>
           <div className="mt-2 flex items-center justify-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-100 py-0.5 px-2 rounded-full w-max mx-auto">

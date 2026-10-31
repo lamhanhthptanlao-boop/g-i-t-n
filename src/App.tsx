@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Student, GameMode, CallMode, ThemeMode, CallHistoryItem } from './types';
 import { sound } from './utils/soundEffects';
 import { DEFAULT_STUDENTS } from './utils/studentParser';
+import { gestureDetector } from './utils/handGestureDetector';
 
 // Components
 import { LuckyWheel } from './components/modes/LuckyWheel';
@@ -40,6 +41,7 @@ import { SeatingMap } from './components/SeatingMap';
 import { SettingsModal } from './components/SettingsModal';
 import { GameshowSettings } from './types';
 import { launchMiniConfettiBurst } from './utils/celebrationEffects';
+import { formatStudentCallSpeech, formatMultiStudentCallSpeech } from './utils/vietnameseSpeech';
 
 import {
   Volume2,
@@ -363,14 +365,14 @@ export default function App() {
     if (settings.enableTTS && gameMode !== 'virtual_mc') {
       if (chosenList.length === 1) {
         sound.speakVirtualMC(
-          `Xin chúc mừng bạn, ${chosenList[0].name}!`,
+          formatStudentCallSpeech(chosenList[0].name),
           settings.voiceURI,
           settings.voiceRate,
           settings.voicePitch
         );
       } else {
         sound.speakVirtualMC(
-          `Xin chúc mừng ${chosenList.length} bạn: ${chosenList.map((s) => s.name).join(', ')}!`,
+          formatMultiStudentCallSpeech(chosenList.map((s) => s.name)),
           settings.voiceURI,
           settings.voiceRate,
           settings.voicePitch
@@ -434,6 +436,30 @@ export default function App() {
     sound.playSparkle();
   }, []);
 
+  // Centralized function to stop all camera streams and return to gameshow stage
+  const handleReturnHome = useCallback(() => {
+    try {
+      gestureDetector.stopCamera();
+    } catch (e) {
+      console.warn('stopCamera error:', e);
+    }
+    setViewTab('game');
+    setGameMode('gameshow_live');
+    setIsPicking(false);
+    sound.playSparkle();
+  }, []);
+
+  // Automatic cleanup safety net: whenever viewTab leaves 'camera' and mode is not 'camera_gesture', guarantee camera is shut down
+  useEffect(() => {
+    if (viewTab !== 'camera' && gameMode !== 'camera_gesture') {
+      try {
+        gestureDetector.stopCamera();
+      } catch {
+        // Ignore
+      }
+    }
+  }, [viewTab, gameMode]);
+
   // Keyboard shortcut: Spacebar or Enter triggers pick
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -472,10 +498,10 @@ export default function App() {
       }}
     >
       {/* Top Header Bar */}
-      <header className="w-full max-w-6xl mx-auto flex items-center justify-between gap-4 py-2 mb-3">
+      <header className="w-full max-w-6xl mx-auto flex items-center justify-between gap-4 py-2.5 mb-3 px-2">
         {/* Brand Zone with Cat Logo */}
         <div className="flex items-center gap-2.5">
-          <div className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-md shadow-amber-500/20 ring-2 ring-amber-400/30 shrink-0">
+          <div className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-indigo-200 dark:border-indigo-800 shadow-md shadow-indigo-500/10 ring-2 ring-indigo-400/20 shrink-0 transform hover:scale-105 transition-transform">
             <img
               src="/src/assets/images/cat_logo_cute_1793188309200.jpg"
               alt="Logo Mèo Gameshow"
@@ -483,24 +509,26 @@ export default function App() {
             />
           </div>
           <div>
-            <h1 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-1.5 truncate text-amber-600 dark:text-amber-400">
-              <span>CLASSROOM MAGIC</span>
-              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-950/60 dark:text-pink-300 border border-pink-300">
+            <h1 className="text-base sm:text-lg font-black tracking-tight flex items-center gap-1.5 truncate">
+              <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                CLASSROOM MAGIC
+              </span>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/70 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                 🐾 MS MÈO
               </span>
             </h1>
-            <p className="hidden md:block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              Vòng Quay May Mắn & Gameshow Lớp Học
+            <p className="hidden md:block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+              Vòng Quay May Mắn & Gamification Lớp Học
             </p>
           </div>
         </div>
 
         {/* Action Controls & Navigation */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Theme Switcher */}
           <button
             onClick={() => setTheme(theme === 'cute' ? 'gameshow' : 'cute')}
-            className="p-2 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-xs hover:scale-105 transition-all text-xs font-semibold flex items-center gap-1.5"
+            className="p-2 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-600 transition-all text-xs font-semibold flex items-center gap-1.5"
             title="Đổi giao diện Dễ thương / Gameshow"
           >
             {theme === 'cute' ? (
@@ -522,7 +550,7 @@ export default function App() {
             className={`p-2 rounded-xl border transition-all ${
               isMuted
                 ? 'bg-rose-50 dark:bg-rose-950/50 border-rose-300 text-rose-500'
-                : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
             }`}
             title={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'}
           >
@@ -534,8 +562,8 @@ export default function App() {
             onClick={toggleBgm}
             className={`p-2 rounded-xl border transition-all ${
               isBgmActive
-                ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-400 text-amber-600 dark:text-amber-400 animate-pulse'
-                : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-400 text-indigo-600 dark:text-indigo-400 animate-pulse'
+                : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
             }`}
             title={isBgmActive ? 'Tắt nhạc nền' : 'Bật nhạc nền gameshow'}
           >
@@ -547,8 +575,8 @@ export default function App() {
             onClick={() => setIsProjectorMode(!isProjectorMode)}
             className={`p-2 rounded-xl border transition-all ${
               isProjectorMode
-                ? 'bg-purple-600 border-purple-500 text-white shadow-md'
-                : 'bg-white/80 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                ? 'bg-indigo-600 border-indigo-500 text-white shadow-md'
+                : 'bg-white/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-indigo-300'
             }`}
             title="Chế độ Trình chiếu Máy Chiếu (chữ siêu to, tối giản)"
           >
@@ -558,16 +586,16 @@ export default function App() {
           {/* Settings Modal Button */}
           <button
             onClick={() => setShowSettingsModal(true)}
-            className="p-2 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all hover:scale-105"
+            className="p-2 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all hover:border-indigo-300 hover:scale-105"
             title="Cài đặt gameshow (thời lượng, kịch tính, âm thanh)"
           >
-            <Settings className="w-4 h-4 text-amber-500" />
+            <Settings className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           </button>
 
           {/* Fullscreen Toggle */}
           <button
             onClick={toggleFullscreen}
-            className="p-2 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all hidden sm:block"
+            className="p-2 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all hidden sm:block hover:border-indigo-300"
             title="Toàn màn hình"
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
@@ -576,7 +604,7 @@ export default function App() {
           {/* Nút Pháo tay (Confetti Burst khen ngợi học sinh tức thì tại chuột) */}
           <button
             onClick={(e) => handlePraiseConfetti(e)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 active:scale-95 text-white font-bold text-xs shadow-md shadow-pink-500/25 transition-all hover:scale-105 ring-2 ring-pink-300/40"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 active:scale-95 text-white font-bold text-xs shadow-md shadow-pink-500/25 transition-all hover:scale-105 ring-2 ring-pink-300/40"
             title="Bấm để bắn pháo tay khen ngợi học sinh tại vị trí chuột mà không cần gọi tên!"
           >
             <span className="text-base animate-pulse">👏</span>
@@ -590,13 +618,14 @@ export default function App() {
               onTriggerPick={triggerPick}
               onSelectMode={(m) => setGameMode(m)}
               onPause={() => setIsPicking(false)}
+              onReturnHome={handleReturnHome}
             />
           )}
 
           {/* Student Roster Button */}
           <button
             onClick={() => setShowManagerModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all hover:scale-105"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all hover:scale-105"
           >
             <Users className="w-4 h-4" />
             <span className="hidden sm:inline">Danh sách ({totalStudents})</span>
@@ -605,7 +634,7 @@ export default function App() {
           {/* History Drawer Button */}
           <button
             onClick={() => setShowHistoryDrawer(true)}
-            className="p-2 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all"
+            className="p-2 rounded-xl bg-white/90 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 transition-all hover:border-indigo-300"
             title="Xem lịch sử gọi tên"
           >
             <History className="w-4 h-4" />
@@ -615,35 +644,37 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="w-full max-w-6xl mx-auto flex-1 flex flex-col items-center justify-between">
-        {/* Banner Section with Ms. Mèo Welcome */}
+        {/* Hero Banner Section with Ms. Mèo Welcome */}
         {!isProjectorMode && (
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 text-center my-2 animate-fade-in">
-            {/* Cute Ms Meo Mini Avatar */}
-            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-amber-300 shadow-md ring-2 ring-pink-300/50 shrink-0 transform hover:rotate-6 transition-transform">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 text-center my-3 animate-fade-in max-w-3xl px-4">
+            {/* Cute Ms Meo Mascot Avatar */}
+            <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-indigo-200 dark:border-indigo-800 shadow-md ring-2 ring-indigo-400/30 shrink-0 transform hover:rotate-6 transition-transform">
               <img
                 src="/src/assets/images/ms_meo_mascot_1793188289324.jpg"
                 alt="Ms. Mèo Mascot"
                 className="w-full h-full object-cover"
               />
-              <span className="absolute bottom-0 inset-x-0 bg-amber-500/90 text-[9px] font-black text-white text-center py-0.5">
+              <span className="absolute bottom-0 inset-x-0 bg-indigo-600/90 text-[9px] font-black text-white text-center py-0.5">
                 MS MÈO
               </span>
             </div>
             <div>
-              <h2 className="text-xl sm:text-3xl font-black tracking-tight text-amber-500 dark:text-amber-400 drop-shadow-xs flex items-center justify-center gap-2">
-                <span>🎉 HÔM NAY AI SẼ ĐƯỢC GỌI TÊN NHỈ?</span>
-                <span className="text-2xl animate-bounce">🐾</span>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight drop-shadow-xs flex items-center justify-center gap-2 [text-wrap:balance]">
+                <span className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
+                  HÔM NAY AI SẼ ĐƯỢC GỌI TÊN NHỈ?
+                </span>
+                <span className="text-2xl animate-bounce">✨</span>
               </h2>
-              <p className="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 mt-0.5">
-                Cùng cô giáo <span className="text-amber-600 dark:text-amber-300 font-black">Ms. Mèo</span> khám phá những ngôi sao tri thức của lớp mình! ✨
+              <p className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300 mt-1 [text-wrap:balance]">
+                Cùng cô giáo <span className="text-indigo-600 dark:text-indigo-400 font-bold">Ms. Mèo</span> tạo không khí hào hứng, công bằng và bùng nổ cho tiết học! 🐾
               </p>
             </div>
           </div>
         )}
 
-        {/* View Switcher: 10 Live Gameshows vs 5 3D Folk Games vs Classroom Seating Map */}
+        {/* View Switcher: 10 Live Gameshows vs 5 3D Folk Games vs Camera AI vs Seating Map */}
         {!isProjectorMode && (
-          <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs mb-3">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-indigo-100 dark:border-slate-800 shadow-sm mb-3">
             <button
               onClick={() => {
                 setViewTab('game');
@@ -651,10 +682,10 @@ export default function App() {
                   setGameMode('gameshow_live');
                 }
               }}
-              className={`px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
                 viewTab === 'game' && !['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/25 ring-2 ring-indigo-300/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               🎬 10 Gameshow Truyền Hình Live
@@ -666,10 +697,10 @@ export default function App() {
                   setGameMode('catch_duck');
                 }
               }}
-              className={`px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
                 viewTab === 'game' && ['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-300/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               🌾 5 Trò Chơi Dân Gian 3D
@@ -680,10 +711,10 @@ export default function App() {
                 setGameMode('camera_gesture');
                 sound.playSparkle();
               }}
-              className={`px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
                 viewTab === 'camera' || (viewTab === 'game' && gameMode === 'camera_gesture')
-                  ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/30 ring-2 ring-rose-300/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span>🖐️</span>
@@ -691,10 +722,10 @@ export default function App() {
             </button>
             <button
               onClick={() => setViewTab('seating')}
-              className={`px-3 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
                 viewTab === 'seating'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  ? 'bg-gradient-to-r from-indigo-700 to-indigo-900 text-white shadow-md shadow-indigo-600/25 ring-2 ring-indigo-300/40'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -728,8 +759,8 @@ export default function App() {
                   }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                     gameMode === m.id || (m.id === 'gameshow_live' && gameMode === 'gameshow') || (m.id === 'wheel_3d' && gameMode === 'wheel')
-                      ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30 scale-105 ring-2 ring-amber-300'
-                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30 scale-105 ring-2 ring-indigo-300'
+                      : 'bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                   }`}
                 >
                   <span>{m.icon}</span>
@@ -754,7 +785,7 @@ export default function App() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                     gameMode === m.id
                       ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/30 scale-105 ring-2 ring-emerald-300'
-                      : 'bg-white/80 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                      : 'bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                   }`}
                 >
                   <span>{m.icon}</span>
@@ -780,8 +811,10 @@ export default function App() {
               students={callMode === 'no_repeat' ? uncalledStudents : students}
               isPicking={isPicking}
               selectedStudent={currentSelectedStudent}
+              selectedStudents={currentSelectedStudents}
               onTriggerPick={triggerPick}
               onPickEnd={handlePickAnimationEnd}
+              onReturnHome={handleReturnHome}
             />
           ) : (
             <>
@@ -888,8 +921,10 @@ export default function App() {
                   students={callMode === 'no_repeat' ? uncalledStudents : students}
                   isPicking={isPicking}
                   selectedStudent={currentSelectedStudent}
+                  selectedStudents={currentSelectedStudents}
                   onTriggerPick={triggerPick}
                   onPickEnd={handlePickAnimationEnd}
+                  onReturnHome={handleReturnHome}
                 />
               )}
 
@@ -999,8 +1034,8 @@ export default function App() {
               disabled={isPicking || totalStudents === 0}
               className={`flex-1 py-4 sm:py-5 px-6 sm:px-8 rounded-3xl font-black text-xl sm:text-2xl tracking-wider text-white shadow-2xl transition-all duration-150 transform select-none ${
                 isPicking
-                  ? 'bg-gradient-to-r from-orange-600 via-rose-600 to-amber-600 animate-vibrate shadow-rose-500/60 ring-4 ring-rose-400 scale-98 cursor-wait'
-                  : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 hover:scale-105 active:scale-95 shadow-amber-500/50 ring-4 ring-amber-300 animate-idle-shake'
+                  ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-indigo-600 animate-vibrate shadow-purple-500/50 ring-4 ring-purple-300 scale-98 cursor-wait'
+                  : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 hover:from-indigo-700 hover:to-pink-600 hover:scale-105 active:scale-95 shadow-indigo-500/40 ring-4 ring-indigo-200/50 animate-idle-shake'
               } flex items-center justify-center gap-3`}
             >
               <Play className={`w-7 h-7 fill-white ${isPicking ? 'animate-spin' : ''}`} />
@@ -1011,7 +1046,7 @@ export default function App() {
             {/* Quick Confetti & Praise Button ("Pháo tay khen ngợi học sinh") */}
             <button
               onClick={(e) => handlePraiseConfetti(e)}
-              className="py-3.5 sm:py-4 px-3 sm:px-4 rounded-3xl bg-gradient-to-b from-pink-500 via-rose-500 to-amber-500 hover:from-pink-600 hover:to-amber-600 active:scale-90 text-white font-black shadow-lg shadow-pink-500/30 ring-3 ring-pink-300/60 transition-all flex flex-col items-center justify-center gap-0.5 shrink-0"
+              className="py-3.5 sm:py-4 px-3 sm:px-4 rounded-3xl bg-gradient-to-b from-pink-500 via-purple-500 to-indigo-600 hover:from-pink-600 hover:to-indigo-700 active:scale-90 text-white font-black shadow-lg shadow-pink-500/30 ring-3 ring-pink-300/50 transition-all flex flex-col items-center justify-center gap-0.5 shrink-0"
               title="Pháo tay khen ngợi học sinh tức thì tại vị trí chuột (không cần gọi tên)!"
             >
               <span className="text-2xl sm:text-3xl animate-bounce">👏</span>
@@ -1020,20 +1055,20 @@ export default function App() {
           </div>
 
           <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-            Mẹo: Nhấn phím <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Space</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Enter</kbd> trên bàn phím để gọi tên ngay!
+            Mẹo: Nhấn phím <kbd className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Space</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Enter</kbd> trên bàn phím để gọi tên ngay!
           </span>
 
           {/* Classroom Stats & Rule Toggle */}
-          <div className="w-full flex flex-wrap items-center justify-between gap-3 p-3 bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200 dark:border-slate-800 backdrop-blur-xs text-xs">
+          <div className="w-full flex flex-wrap items-center justify-between gap-3 p-3 bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-indigo-100 dark:border-slate-800 shadow-sm backdrop-blur-xs text-xs">
             {/* Rule mode picker: No repeat vs Allow repeat */}
             <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-semibold">Quy tắc:</span>
+              <span className="text-slate-500 dark:text-slate-400 font-medium">Quy tắc:</span>
               <button
                 onClick={() => setCallMode(callMode === 'no_repeat' ? 'allow_repeat' : 'no_repeat')}
                 className={`px-3 py-1 rounded-lg font-bold transition-all ${
                   callMode === 'no_repeat'
                     ? 'bg-emerald-500 text-white shadow-xs'
-                    : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                 }`}
                 title="Bấm để đổi chế độ gọi tên"
               >
@@ -1041,25 +1076,25 @@ export default function App() {
               </button>
             </div>
 
-            {/* Counters */}
-            <div className="flex items-center gap-4 font-semibold text-slate-600 dark:text-slate-300">
+            {/* Counters with clean unboxed text and tabular numerals */}
+            <div className="flex items-center gap-3 font-medium text-slate-600 dark:text-slate-400">
               <div>
-                Tổng số: <strong className="text-slate-900 dark:text-white">{totalStudents}</strong>
+                Tổng số: <strong className="text-slate-900 dark:text-white tabular-nums font-mono">{totalStudents}</strong>
               </div>
-              <div>·</div>
+              <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
               <div>
-                Đã gọi: <strong className="text-emerald-600 dark:text-emerald-400">{calledCount}</strong>
+                Đã gọi: <strong className="text-emerald-600 dark:text-emerald-400 tabular-nums font-mono">{calledCount}</strong>
               </div>
-              <div>·</div>
+              <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">·</span>
               <div>
-                Còn lại: <strong className="text-amber-600 dark:text-amber-400">{remainingCount}</strong>
+                Còn lại: <strong className="text-indigo-600 dark:text-indigo-400 tabular-nums font-mono">{remainingCount}</strong>
               </div>
             </div>
 
             {/* Quick Reset Round */}
             <button
               onClick={handleResetRound}
-              className="p-1.5 text-slate-500 hover:text-amber-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               title="Bắt đầu lượt mới (đặt lại trạng thái chưa gọi)"
             >
               <RotateCcw className="w-4 h-4" />
@@ -1100,6 +1135,7 @@ export default function App() {
         remainingCount={remainingCount}
         callNumber={history.length}
         enableTTS={settings.enableTTS}
+        isCameraMode={viewTab === 'camera' || gameMode === 'camera_gesture'}
         voiceURI={settings.voiceURI}
         voiceRate={settings.voiceRate}
         voicePitch={settings.voicePitch}
@@ -1119,6 +1155,7 @@ export default function App() {
           setShowWinnerModal(false);
           setIsConfettiActive(false);
         }}
+        onExitToHome={handleReturnHome}
       />
 
       <StudentManagerModal
@@ -1143,6 +1180,7 @@ export default function App() {
         settings={settings}
         onUpdateSettings={setSettings}
         onClose={() => setShowSettingsModal(false)}
+        onGoHome={handleReturnHome}
       />
 
       {/* Floating praise badges (displayed upon clicking "Pháo tay") */}

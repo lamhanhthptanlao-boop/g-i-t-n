@@ -3,7 +3,8 @@ import { Student, FireworksSpeed } from '../types';
 import { MC_CHEER_QUOTES } from '../utils/studentParser';
 import { sound } from '../utils/soundEffects';
 import { launchGrandCelebrationFireworks } from '../utils/celebrationEffects';
-import { Sparkles, RotateCcw, ArrowRight, RefreshCw, X, Volume2, Award, Heart, Zap, Clock } from 'lucide-react';
+import { formatStudentCallSpeech, formatMultiStudentCallSpeech } from '../utils/vietnameseSpeech';
+import { Sparkles, RotateCcw, ArrowRight, RefreshCw, X, Volume2, Award, Heart, Zap, Clock, Camera, Home } from 'lucide-react';
 
 interface WinnerModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface WinnerModalProps {
   remainingCount: number;
   callNumber: number;
   enableTTS?: boolean;
+  isCameraMode?: boolean;
   fireworksSpeed?: FireworksSpeed;
   fireworksDuration?: number;
   voiceURI?: string;
@@ -24,6 +26,7 @@ interface WinnerModalProps {
   onUndo: () => void;
   onResetRound: () => void;
   onClose: () => void;
+  onExitToHome?: () => void;
 }
 
 export const WinnerModal: React.FC<WinnerModalProps> = ({
@@ -35,6 +38,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
   remainingCount,
   callNumber,
   enableTTS = true,
+  isCameraMode = false,
   fireworksSpeed = 'normal',
   fireworksDuration = 5,
   voiceURI,
@@ -45,6 +49,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
   onUndo,
   onResetRound,
   onClose,
+  onExitToHome,
 }) => {
   const [mcQuote, setMcQuote] = useState<string>('');
 
@@ -61,14 +66,11 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
 
       if (enableTTS) {
         if (displayList.length === 1) {
-          sound.speakVirtualMC(`Ms Mèo xin chúc mừng học sinh ${displayList[0].name}!`, voiceURI, voiceRate, voicePitch);
+          const speechText = formatStudentCallSpeech(displayList[0].name);
+          sound.speakVirtualMC(speechText, voiceURI, voiceRate, voicePitch);
         } else {
-          sound.speakVirtualMC(
-            `Ms Mèo xin chúc mừng ${displayList.length} bạn: ${displayList.map((s) => s.name).join(', ')}!`,
-            voiceURI,
-            voiceRate,
-            voicePitch
-          );
+          const speechText = formatMultiStudentCallSpeech(displayList.map((s) => s.name));
+          sound.speakVirtualMC(speechText, voiceURI, voiceRate, voicePitch);
         }
       }
     }
@@ -129,20 +131,21 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
               <button
                 onClick={() =>
                   sound.speakVirtualMC(
-                    `Xin chúc mừng học sinh ${displayList[0].name}!`,
+                    formatStudentCallSpeech(displayList[0].name),
                     voiceURI,
                     voiceRate,
                     voicePitch
                   )
                 }
                 className="p-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-slate-700 text-amber-700 dark:text-amber-300 transition-colors flex items-center gap-1 text-[11px] font-bold"
-                title="Đọc lại tên học sinh bằng giọng Tiếng Việt"
+                title="Đọc lại tên học sinh bằng giọng Tiếng Việt chuẩn có dấu"
               >
                 <Volume2 className="w-3.5 h-3.5" />
-                <span>Đọc tên</span>
+                <span>Đọc chuẩn dấu</span>
               </button>
             </div>
-            <h1 className="text-3xl sm:text-5xl font-black text-amber-600 dark:text-amber-300 tracking-tight mt-1 truncate">
+            {/* Full student name - NO TRUNCATION */}
+            <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-amber-600 dark:text-amber-300 tracking-tight mt-1 whitespace-normal break-words leading-tight px-1 py-1">
               {displayList[0].name}
             </h1>
           </div>
@@ -156,14 +159,14 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
               <button
                 onClick={() =>
                   sound.speakVirtualMC(
-                    `Xin chúc mừng các bạn: ${displayList.map((s) => s.name).join(', ')}!`,
+                    formatMultiStudentCallSpeech(displayList.map((s) => s.name)),
                     voiceURI,
                     voiceRate,
                     voicePitch
                   )
                 }
                 className="p-1.5 px-2.5 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-slate-700 text-amber-700 dark:text-amber-300 transition-colors flex items-center gap-1 text-[11px] font-bold"
-                title="Đọc tên tất cả học sinh trong đội bằng giọng Tiếng Việt"
+                title="Đọc tên tất cả học sinh trong đội bằng giọng Tiếng Việt chuẩn"
               >
                 <Volume2 className="w-3.5 h-3.5" />
                 <span>Đọc cả đội</span>
@@ -173,18 +176,19 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
               {displayList.map((st, idx) => (
                 <div
                   key={st.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/80 dark:bg-slate-900/80 border border-amber-200/80 dark:border-slate-700 shadow-xs"
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/80 dark:bg-slate-900/80 border border-amber-200/80 dark:border-slate-700 shadow-xs gap-2"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <span className="w-6 h-6 rounded-full bg-amber-400 text-white font-black text-xs flex items-center justify-center shrink-0">
                       {idx + 1}
                     </span>
-                    <span className="font-black text-base sm:text-lg text-slate-800 dark:text-slate-100 truncate">
+                    {/* Full student name - NO TRUNCATION */}
+                    <span className="font-black text-sm sm:text-base text-slate-800 dark:text-slate-100 whitespace-normal break-words leading-snug text-left">
                       {st.name}
                     </span>
                   </div>
                   <button
-                    onClick={() => sound.speakVirtualMC(`Bạn ${st.name}`, voiceURI, voiceRate, voicePitch)}
+                    onClick={() => sound.speakVirtualMC(formatStudentCallSpeech(st.name), voiceURI, voiceRate, voicePitch)}
                     className="p-1 text-slate-400 hover:text-amber-600 transition-colors shrink-0"
                     title={`Đọc tên bạn ${st.name}`}
                   >
@@ -267,30 +271,69 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mt-2">
-          <button
-            onClick={() => {
-              onClose();
-              onNext();
-            }}
-            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm tracking-wide shadow-lg shadow-amber-500/30 transition-all hover:scale-[1.02]"
-          >
-            <span>GỌI BẠN TIẾP THEO</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+        {/* Actions - Dedicated continuous camera calling flow */}
+        {isCameraMode ? (
+          <div className="flex flex-col gap-2 w-full mt-2">
+            <button
+              onClick={onClose}
+              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-600 hover:from-emerald-600 hover:to-indigo-700 text-white font-black text-sm tracking-wide shadow-xl shadow-emerald-500/30 transition-all hover:scale-[1.02] active:scale-95 border-2 border-emerald-300"
+            >
+              <Camera className="w-5 h-5 text-yellow-300 animate-pulse" />
+              <div className="flex flex-col items-center">
+                <span>TIẾP TỤC GỌI BẰNG CAMERA (GIƠ TAY TIẾP)</span>
+                <span className="text-[10px] font-normal opacity-90">Giữ camera hoạt động để gọi bạn tiếp theo</span>
+              </div>
+            </button>
 
-          <button
-            onClick={() => {
-              onUndo();
-              onClose();
-            }}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>HOÀN TÁC LƯỢT VỪA RỒI</span>
-          </button>
-        </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  onUndo();
+                  onClose();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Hoàn tác vừa rồi</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onClose();
+                  if (onExitToHome) onExitToHome();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-xs transition-colors border border-indigo-200 dark:border-indigo-800"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>Về Trang Chủ</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mt-2">
+            <button
+              onClick={() => {
+                onClose();
+                onNext();
+              }}
+              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm tracking-wide shadow-lg shadow-amber-500/30 transition-all hover:scale-[1.02]"
+            >
+              <span>GỌI BẠN TIẾP THEO</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => {
+                onUndo();
+                onClose();
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>HOÀN TÁC LƯỢT VỪA RỒI</span>
+            </button>
+          </div>
+        )}
 
         {remainingCount === 0 && (
           <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 rounded-xl w-full text-center">

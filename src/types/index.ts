@@ -32,6 +32,8 @@ export interface GameshowSettings {
   duration: number; // 2, 4, 6 seconds
   dramaLevel: 'quick' | 'standard' | 'dramatic';
   enableTTS: boolean; // Voice reading of student name
+  vietnameseStandardAccent?: boolean; // Chế độ đọc Tiếng Việt có dấu chuẩn (mặc định: bật)
+  voiceDialect?: 'auto' | 'bac' | 'nam'; // Tự động / Giọng Bắc chuẩn / Giọng Nam chuẩn
   reducedMotion: boolean;
   fireworksSpeed: FireworksSpeed; // 'slow' (0.7x), 'normal' (1.0x), 'fast' (1.4x), 'super' (2.0x)
   fireworksDuration: number; // 3, 5, 8, 12 seconds
