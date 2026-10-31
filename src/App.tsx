@@ -42,6 +42,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { GameshowSettings } from './types';
 import { launchMiniConfettiBurst } from './utils/celebrationEffects';
 import { formatStudentCallSpeech, formatMultiStudentCallSpeech } from './utils/vietnameseSpeech';
+import { catLogo, msMeoMascot } from './assets/images';
 
 import {
   Volume2,
@@ -503,7 +504,7 @@ export default function App() {
         <div className="flex items-center gap-2.5">
           <div className="w-11 h-11 rounded-2xl overflow-hidden border-2 border-indigo-200 dark:border-indigo-800 shadow-md shadow-indigo-500/10 ring-2 ring-indigo-400/20 shrink-0 transform hover:scale-105 transition-transform">
             <img
-              src="/src/assets/images/cat_logo_cute_1793188309200.jpg"
+              src={catLogo}
               alt="Logo Mèo Gameshow"
               className="w-full h-full object-cover"
             />
@@ -650,7 +651,7 @@ export default function App() {
             {/* Cute Ms Meo Mascot Avatar */}
             <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl overflow-hidden border-2 border-indigo-200 dark:border-indigo-800 shadow-md ring-2 ring-indigo-400/30 shrink-0 transform hover:rotate-6 transition-transform">
               <img
-                src="/src/assets/images/ms_meo_mascot_1793188289324.jpg"
+                src={msMeoMascot}
                 alt="Ms. Mèo Mascot"
                 className="w-full h-full object-cover"
               />

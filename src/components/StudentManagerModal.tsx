@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { catLogo } from '../assets/images';
 import { Student } from '../types';
 import {
   parsePastedStudentList,
@@ -193,7 +194,7 @@ export const StudentManagerModal: React.FC<StudentManagerModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl overflow-hidden border border-amber-300 shadow-xs shrink-0 ring-2 ring-amber-400/20">
               <img
-                src="/src/assets/images/cat_logo_cute_1793188309200.jpg"
+                src={catLogo}
                 alt="Logo Mèo"
                 className="w-full h-full object-cover"
               />

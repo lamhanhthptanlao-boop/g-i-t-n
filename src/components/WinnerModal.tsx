@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { msMeoMascot } from '../assets/images';
 import { Student, FireworksSpeed } from '../types';
 import { MC_CHEER_QUOTES } from '../utils/studentParser';
 import { sound } from '../utils/soundEffects';
@@ -97,7 +98,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
         <div className="relative -mt-20 sm:-mt-24 mb-3">
           <div className="relative w-32 h-32 sm:w-36 sm:h-36 rounded-full border-4 border-amber-300 shadow-2xl overflow-hidden bg-amber-100 ring-4 ring-pink-300/60 dark:ring-amber-400/40 transform hover:scale-105 transition-transform duration-300">
             <img
-              src="/src/assets/images/ms_meo_mascot_1793188289324.jpg"
+              src={msMeoMascot}
               alt="Cô giáo Ms. Mèo Mascot"
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"

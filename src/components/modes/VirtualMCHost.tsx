@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { classroomMascot3D } from '../../assets/images';
 import { Student } from '../../types';
 import { sound } from '../../utils/soundEffects';
 import { Mic, Volume2, Sparkles, UserCheck } from 'lucide-react';
@@ -76,7 +77,7 @@ export const VirtualMCHost: React.FC<VirtualMCHostProps> = ({
           }`}
         >
           <img
-            src="/src/assets/images/classroom_mascot_3d_1793182498900.jpg"
+            src={classroomMascot3D}
             alt="MC ảo dẫn chương trình"
             className="w-full h-full object-cover rounded-full"
             referrerPolicy="no-referrer"

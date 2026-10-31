@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { msMeoMascot } from '../../assets/images';
 import { Student } from '../../types';
 import {
   gestureDetector,
@@ -545,7 +546,7 @@ export const CameraGestureMode: React.FC<CameraGestureModeProps> = ({
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-11 h-11 rounded-xl overflow-hidden border border-amber-300 shadow-sm shrink-0">
             <img
-              src="/src/assets/images/ms_meo_mascot_1793188289324.jpg"
+              src={msMeoMascot}
               alt="Ms Mèo Mascot"
               className="w-full h-full object-cover"
             />
