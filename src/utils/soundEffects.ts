@@ -3,6 +3,8 @@
  * Generates gameshow sound effects with zero external audio assets.
  */
 
+import { findBestMatchingVietnameseVoice, normalizeVietnameseSpeechText } from './vietnameseSpeech';
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = false;
@@ -42,13 +44,15 @@ class SoundEngine {
     const all = this.getAvailableVoices();
     return all.filter(
       (v) =>
-        v.lang.toLowerCase().includes('vi') ||
+        v.lang.toLowerCase().startsWith('vi') ||
         v.lang.toLowerCase().includes('vn') ||
         v.name.toLowerCase().includes('vietnam') ||
         v.name.toLowerCase().includes('tiếng việt') ||
+        v.name.toLowerCase().includes('tieng viet') ||
         v.name.toLowerCase().includes('hoaimy') ||
         v.name.toLowerCase().includes('namminh') ||
-        v.name.toLowerCase().includes('linh')
+        v.name.toLowerCase().includes('linh') ||
+        v.name.toLowerCase().includes('mai')
     );
   }
 
@@ -771,17 +775,11 @@ class SoundEngine {
       window.speechSynthesis.cancel();
 
       // Normalize Vietnamese text (NFC Unicode, expand abbreviations, remove obstructive emojis)
-      const normalized = text
-        .normalize('NFC')
-        .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}]/gu, ' ')
-        .replace(/\bHS\b/gi, 'học sinh')
-        .replace(/\bSTT\b/gi, 'số thứ tự')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const normalized = normalizeVietnameseSpeechText(text);
 
       const utter = new SpeechSynthesisUtterance(normalized);
       utter.lang = 'vi-VN';
-      // Rate 0.95 gives optimal clarity for Vietnamese tones without rushing
+      // Rate 0.96 gives optimal clarity for Vietnamese tones without rushing
       utter.rate = rateOverride || this.voiceRate || 0.96;
       utter.pitch = pitchOverride || this.voicePitch || 1.02;
       utter.volume = Math.max(0.1, this.volume);
@@ -789,31 +787,8 @@ class SoundEngine {
       const targetURI = voiceURIOverride || this.selectedVoiceURI;
       const allVoices = this.getAvailableVoices();
 
-      let matchedVoice: SpeechSynthesisVoice | undefined;
-
-      // 1. Try matching explicit user-selected voice URI
-      if (targetURI) {
-        matchedVoice = allVoices.find((v) => v.voiceURI === targetURI);
-      }
-
-      // 2. If no voice or voice is not Vietnamese, look for Vietnamese voices
-      if (
-        !matchedVoice ||
-        (!matchedVoice.lang.toLowerCase().includes('vi') &&
-          !matchedVoice.lang.toLowerCase().includes('vn'))
-      ) {
-        const viVoices = this.getVietnameseVoices();
-        if (viVoices.length > 0) {
-          // Priority order: Natural/Online/Neural (Hoài My, Nam Minh, An, Google Tiếng Việt, Linh)
-          matchedVoice =
-            viVoices.find((v) => v.name.includes('HoaiMy') || v.name.includes('Hoài My')) ||
-            viVoices.find((v) => v.name.includes('NamMinh') || v.name.includes('Nam Minh')) ||
-            viVoices.find((v) => v.name.includes('Google') || v.name.toLowerCase().includes('tiếng việt')) ||
-            viVoices.find((v) => v.name.includes('Natural') || v.name.includes('Online')) ||
-            viVoices.find((v) => v.name.includes('Linh')) ||
-            viVoices[0];
-        }
-      }
+      // Use intelligent matcher that connects user preferences/presets (Google, Microsoft, Apple) to browser voices
+      const matchedVoice = findBestMatchingVietnameseVoice(targetURI || undefined, allVoices);
 
       if (matchedVoice) {
         utter.voice = matchedVoice;

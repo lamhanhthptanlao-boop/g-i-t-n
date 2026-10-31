@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { GameshowSettings } from '../types';
-import { Settings, X, Volume2, Clock, Sparkles, Mic, Zap, Home } from 'lucide-react';
+import { Settings, X, Volume2, Clock, Sparkles, Mic, Zap, Home, RefreshCw, Check, CheckCircle2 } from 'lucide-react';
 import { sound } from '../utils/soundEffects';
+import { STANDARD_VIETNAMESE_VOICE_PRESETS, getPrioritizedVietnameseVoices } from '../utils/vietnameseSpeech';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -19,16 +20,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onGoHome,
 }) => {
   const [vietnameseVoices, setVietnameseVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [isTestingVoice, setIsTestingVoice] = useState<boolean>(false);
 
-  useEffect(() => {
-    const updateVoices = () => {
+  const refreshVoices = () => {
+    setIsScanning(true);
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
       const vi = sound.getVietnameseVoices();
       setVietnameseVoices(vi);
-    };
+    }
+    setTimeout(() => setIsScanning(false), 400);
+  };
 
-    updateVoices();
+  useEffect(() => {
+    refreshVoices();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = updateVoices;
+      window.speechSynthesis.onvoiceschanged = () => {
+        const vi = sound.getVietnameseVoices();
+        setVietnameseVoices(vi);
+      };
     }
   }, []);
 
@@ -351,11 +362,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </label>
                 </div>
 
-                {/* Voice Selection Dropdown */}
+                {/* Quick Preset Voice Pills */}
                 <div>
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">
-                    🇻🇳 Bộ giọng đọc Tiếng Việt hệ thống:
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>🇻🇳 Chọn Giọng Đọc Google / Microsoft:</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={refreshVoices}
+                      disabled={isScanning}
+                      className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 font-semibold flex items-center gap-1 transition-colors"
+                      title="Quét lại danh sách giọng từ trình duyệt nếu chưa tải xong"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
+                      <span>{isScanning ? 'Đang quét...' : 'Làm mới giọng'}</span>
+                    </button>
+                  </div>
+
+                  {/* Preset quick buttons */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mb-2">
+                    {[
+                      {
+                        id: '',
+                        label: '✨ Tự động',
+                        sub: 'Tối ưu nhất',
+                        provider: 'Auto',
+                      },
+                      {
+                        id: 'Microsoft HoaiMy Online (Natural) - Vietnamese (Vietnam)',
+                        label: '👩 Hoài My',
+                        sub: 'Nữ Bắc · MS Natural',
+                        provider: 'Microsoft',
+                      },
+                      {
+                        id: 'Microsoft NamMinh Online (Natural) - Vietnamese (Vietnam)',
+                        label: '👨 Nam Minh',
+                        sub: 'Nam Bắc · MS Natural',
+                        provider: 'Microsoft',
+                      },
+                      {
+                        id: 'Google tiếng Việt',
+                        label: '🌐 Google',
+                        sub: 'Chuẩn rõ dấu',
+                        provider: 'Google',
+                      },
+                      {
+                        id: 'Linh',
+                        label: '🍎 Linh',
+                        sub: 'Mac / iOS',
+                        provider: 'Apple',
+                      },
+                      {
+                        id: 'vi-VN',
+                        label: '🇻🇳 Mặc định',
+                        sub: 'vi-VN Hệ thống',
+                        provider: 'System',
+                      },
+                    ].map((item) => {
+                      const isSelected =
+                        (settings.voiceURI || '') === item.id ||
+                        (!settings.voiceURI && item.id === '');
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            onUpdateSettings({ ...settings, voiceURI: item.id });
+                            sound.setPreferredVoice(item.id || null);
+                            sound.playSpinTick(1.2);
+                          }}
+                          className={`p-2 rounded-xl text-left border transition-all ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-500 shadow-md ring-2 ring-indigo-400/50'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold truncate">{item.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-yellow-300 shrink-0" />}
+                          </div>
+                          <span
+                            className={`text-[9px] block truncate mt-0.5 ${
+                              isSelected ? 'text-indigo-100' : 'text-slate-500'
+                            }`}
+                          >
+                            {item.sub}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Dropdown with all available voices */}
                   <select
                     value={settings.voiceURI || ''}
                     onChange={(e) => {
@@ -365,47 +464,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }}
                     className="w-full text-xs p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                   >
-                    <option value="">✨ Tự động (Ưu tiên giọng Tiếng Việt tự nhiên nhất)</option>
-                    {vietnameseVoices.map((v) => (
-                      <option key={v.voiceURI} value={v.voiceURI}>
-                        🇻🇳 {v.name} ({v.lang})
-                      </option>
-                    ))}
-                    {vietnameseVoices.length === 0 && (
-                      <option value="vi-VN">
-                        🇻🇳 Bộ đọc Tiếng Việt chuẩn hệ thống (vi-VN)
-                      </option>
+                    <optgroup label="⭐ Giọng Đọc Google & Microsoft Chuẩn Khuyên Dùng">
+                      {STANDARD_VIETNAMESE_VOICE_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} [{p.dialect} - {p.badge}]
+                        </option>
+                      ))}
+                    </optgroup>
+
+                    {vietnameseVoices.length > 0 && (
+                      <optgroup label={`🎙️ Giọng Tiếng Việt Có Sẵn Trên Máy (${vietnameseVoices.length} giọng)`}>
+                        {vietnameseVoices.map((v) => (
+                          <option key={v.voiceURI} value={v.voiceURI}>
+                            🇻🇳 {v.name} ({v.lang})
+                          </option>
+                        ))}
+                      </optgroup>
                     )}
                   </select>
                 </div>
 
-                {/* Speed / Rate Selection */}
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
-                    Tốc độ phát âm:
-                  </span>
-                  <div className="flex items-center gap-1">
-                    {[
-                      { val: 0.92, label: '0.9x Rõ chữ' },
-                      { val: 0.98, label: '1.0x Chuẩn' },
-                      { val: 1.12, label: '1.1x Nhanh' },
-                    ].map((spd) => (
-                      <button
-                        key={spd.val}
-                        type="button"
-                        onClick={() => {
-                          onUpdateSettings({ ...settings, voiceRate: spd.val });
-                          sound.setVoiceRate(spd.val);
-                        }}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                          (settings.voiceRate || 0.98) === spd.val
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                        }`}
-                      >
-                        {spd.label}
-                      </button>
-                    ))}
+                {/* Speed & Pitch Controls */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {/* Speed / Rate Selection */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                      Tốc độ phát âm:
+                    </span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[
+                        { val: 0.92, label: '0.9x Rõ chữ' },
+                        { val: 0.98, label: '1.0x Chuẩn' },
+                        { val: 1.12, label: '1.1x Nhanh' },
+                      ].map((spd) => (
+                        <button
+                          key={spd.val}
+                          type="button"
+                          onClick={() => {
+                            onUpdateSettings({ ...settings, voiceRate: spd.val });
+                            sound.setVoiceRate(spd.val);
+                          }}
+                          className={`py-1 px-0.5 rounded text-[10px] font-bold text-center transition-all ${
+                            (settings.voiceRate || 0.98) === spd.val
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                          }`}
+                        >
+                          {spd.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pitch Selection */}
+                  <div className="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 block mb-1">
+                      Cao độ giọng (Pitch):
+                    </span>
+                    <div className="grid grid-cols-3 gap-1">
+                      {[
+                        { val: 0.95, label: 'Trầm ấm' },
+                        { val: 1.02, label: 'Tự nhiên' },
+                        { val: 1.10, label: 'Trong trẻo' },
+                      ].map((pit) => (
+                        <button
+                          key={pit.val}
+                          type="button"
+                          onClick={() => {
+                            onUpdateSettings({ ...settings, voicePitch: pit.val });
+                            sound.setVoicePitch(pit.val);
+                          }}
+                          className={`py-1 px-0.5 rounded text-[10px] font-bold text-center transition-all ${
+                            (settings.voicePitch || 1.02) === pit.val
+                              ? 'bg-purple-600 text-white shadow-xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                          }`}
+                        >
+                          {pit.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -413,17 +551,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    setIsTestingVoice(true);
                     sound.speakVirtualMC(
                       'Ms Mèo xin chúc mừng bạn Nguyễn Hoàng Tuấn Vũ đã tỏa sáng!',
                       settings.voiceURI,
                       settings.voiceRate,
                       settings.voicePitch
                     );
+                    setTimeout(() => setIsTestingVoice(false), 2800);
                   }}
-                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/20 active:scale-95"
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/20 active:scale-95"
                 >
-                  <Volume2 className="w-4 h-4" />
-                  <span>Nghe thử phát âm chuẩn dấu (Bắc / Nam) 🔊</span>
+                  <Volume2 className={`w-4 h-4 ${isTestingVoice ? 'animate-bounce text-yellow-300' : ''}`} />
+                  <span>
+                    {isTestingVoice
+                      ? '🔊 Đang đọc thử: "Nguyễn Hoàng Tuấn Vũ"...'
+                      : 'Nghe thử phát âm chuẩn dấu Google / Microsoft 🔊'}
+                  </span>
                 </button>
               </div>
             )}
