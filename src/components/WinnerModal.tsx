@@ -16,6 +16,7 @@ interface WinnerModalProps {
   remainingCount: number;
   callNumber: number;
   enableTTS?: boolean;
+  onlySpeakName?: boolean;
   isCameraMode?: boolean;
   fireworksSpeed?: FireworksSpeed;
   fireworksDuration?: number;
@@ -39,6 +40,7 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
   remainingCount,
   callNumber,
   enableTTS = true,
+  onlySpeakName = true,
   isCameraMode = false,
   fireworksSpeed = 'normal',
   fireworksDuration = 5,
@@ -67,15 +69,15 @@ export const WinnerModal: React.FC<WinnerModalProps> = ({
 
       if (enableTTS) {
         if (displayList.length === 1) {
-          const speechText = formatStudentCallSpeech(displayList[0].name);
+          const speechText = formatStudentCallSpeech(displayList[0].name, onlySpeakName);
           sound.speakVirtualMC(speechText, voiceURI, voiceRate, voicePitch);
         } else {
-          const speechText = formatMultiStudentCallSpeech(displayList.map((s) => s.name));
+          const speechText = formatMultiStudentCallSpeech(displayList.map((s) => s.name), onlySpeakName);
           sound.speakVirtualMC(speechText, voiceURI, voiceRate, voicePitch);
         }
       }
     }
-  }, [isOpen, displayList.length, enableTTS, voiceURI, voiceRate, voicePitch]);
+  }, [isOpen, displayList.length, enableTTS, onlySpeakName, voiceURI, voiceRate, voicePitch]);
 
   if (!isOpen || displayList.length === 0) return null;
 

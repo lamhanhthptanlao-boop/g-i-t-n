@@ -567,6 +567,142 @@ class SoundEngine {
   }
 
   /**
+   * Dog Snoring sound for Chú Mực (Ngáy khò khò Zzz)
+   */
+  public playDogSnore() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(80, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(115, ctx.currentTime + 0.35);
+      osc.frequency.linearRampToValueAtTime(70, ctx.currentTime + 0.75);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(280, ctx.currentTime);
+
+      gain.gain.setValueAtTime(0.01, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.14 * this.volume, ctx.currentTime + 0.35);
+      gain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.75);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.8);
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Dog Bark sound for Chú Mực (Gâu gâu! Mực thức giấc)
+   */
+  public playDogBark() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      [0, 0.16].forEach((offset) => {
+        const start = ctx.currentTime + offset;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(420, start);
+        osc.frequency.exponentialRampToValueAtTime(130, start + 0.13);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(800, start);
+        filter.Q.setValueAtTime(2.2, start);
+
+        gain.gain.setValueAtTime(0.42 * this.volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + 0.15);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Dropped Slippers Clatter sound (Dép lào rơi lách cách)
+   */
+  public playSlippersDrop() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      for (let i = 0; i < 4; i++) {
+        const start = ctx.currentTime + i * 0.07 + Math.random() * 0.03;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(260 + Math.random() * 220, start);
+        osc.frequency.exponentialRampToValueAtTime(95, start + 0.05);
+
+        gain.gain.setValueAtTime(0.18 * this.volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.06);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + 0.07);
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Cha Cha Cha celebration rhythm when Mực high-fives winner!
+   */
+  public playChaChaCha() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      const pattern = [
+        { freq: 523.25, time: 0, dur: 0.15 },       // Do
+        { freq: 659.25, time: 0.2, dur: 0.15 },     // Mi
+        { freq: 783.99, time: 0.4, dur: 0.1 },      // Sol
+        { freq: 783.99, time: 0.52, dur: 0.1 },     // Sol
+        { freq: 1046.50, time: 0.64, dur: 0.35 },   // Do cao!
+      ];
+
+      pattern.forEach((p) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        const start = ctx.currentTime + p.time;
+        osc.frequency.setValueAtTime(p.freq, start);
+
+        gain.gain.setValueAtTime(0.28 * this.volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + p.dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        osc.stop(start + p.dur);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
    * Cheerful background gameshow melody (looping synthetic rhythm)
    */
   public toggleBGM(): boolean {

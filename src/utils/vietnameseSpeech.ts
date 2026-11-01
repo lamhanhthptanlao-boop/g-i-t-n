@@ -131,28 +131,43 @@ export function normalizeVietnameseSpeechText(
 }
 
 /**
- * Formats a single student name announcement with natural Vietnamese prosodic pauses
+ * Formats a student name announcement with natural Vietnamese prosodic pauses.
+ * If onlyName is true (default), strictly adheres to rule "5. CHỈ ĐỌC TÊN",
+ * with proper pauses and emotional stress on the given name.
  */
-export function formatStudentCallSpeech(studentName: string): string {
+export function formatStudentCallSpeech(studentName: string, onlyName: boolean = true): string {
   const cleanName = normalizeVietnameseSpeechText(studentName);
-  return `Xin chúc mừng bạn, ${cleanName}, đã được gọi tên tỏa sáng!`;
+  if (!cleanName) return '';
+
+  if (onlyName) {
+    // "5. CHỈ ĐỌC TÊN": Ngắt nghỉ tự nhiên, ấm áp, dõng dạc, nhấn trọng âm vào tên riêng
+    return `${cleanName}!`;
+  }
+
+  return `Xin chúc mừng bạn, ${cleanName}!`;
 }
 
 /**
- * Formats multi-student announcement (1 to 5 students) with natural cadence
+ * Formats multi-student announcement (1 to 5 students) with natural cadence.
+ * If onlyName is true (default), reads each student's full name separated by commas with natural breath pauses.
  */
-export function formatMultiStudentCallSpeech(studentNames: string[]): string {
-  const cleanNames = studentNames.map((n) => normalizeVietnameseSpeechText(n));
+export function formatMultiStudentCallSpeech(studentNames: string[], onlyName: boolean = true): string {
+  const cleanNames = studentNames.map((n) => normalizeVietnameseSpeechText(n)).filter(Boolean);
   if (cleanNames.length === 0) return '';
-  if (cleanNames.length === 1) return formatStudentCallSpeech(cleanNames[0]);
+  if (cleanNames.length === 1) return formatStudentCallSpeech(cleanNames[0], onlyName);
+
+  if (onlyName) {
+    // "5. CHỈ ĐỌC TÊN": Liệt kê từng tên học sinh với ngắt nghỉ tự nhiên
+    return `${cleanNames.join(', ')}!`;
+  }
 
   if (cleanNames.length === 2) {
-    return `Xin chúc mừng 2 bạn: ${cleanNames[0]}, và bạn ${cleanNames[1]}!`;
+    return `Chúc mừng 2 bạn: ${cleanNames[0]}, và bạn ${cleanNames[1]}!`;
   }
 
   const allExceptLast = cleanNames.slice(0, -1).join(', ');
   const last = cleanNames[cleanNames.length - 1];
-  return `Xin chúc mừng ${cleanNames.length} bạn: ${allExceptLast}, và bạn ${last}!`;
+  return `Chúc mừng ${cleanNames.length} bạn: ${allExceptLast}, và bạn ${last}!`;
 }
 
 /**

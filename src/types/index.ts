@@ -1,4 +1,6 @@
 export type GameMode =
+  // Đặc biệt: Game "Mực ơi đừng dậy!" (Trò chơi gọi tên hot nhất)
+  | 'sleeping_dog'     // Chú Mực canh cổng trường / Mực ơi đừng dậy
   // 10 Live Professional Gameshow Modes
   | 'gameshow_live'    // 1. Gameshow truyền hình trực tiếp
   | 'lottery_drum'     // 2. Máy rút thăm điện tử 3D
@@ -32,6 +34,7 @@ export interface GameshowSettings {
   duration: number; // 2, 4, 6 seconds
   dramaLevel: 'quick' | 'standard' | 'dramatic';
   enableTTS: boolean; // Voice reading of student name
+  onlySpeakName?: boolean; // CHỈ ĐỌC TÊN (mặc định: bật theo yêu cầu giáo viên)
   vietnameseStandardAccent?: boolean; // Chế độ đọc Tiếng Việt có dấu chuẩn (mặc định: bật)
   voiceDialect?: 'auto' | 'bac' | 'nam'; // Tự động / Giọng Bắc chuẩn / Giọng Nam chuẩn
   reducedMotion: boolean;
@@ -54,6 +57,8 @@ export interface Student {
   lastCalledAt?: number;
   seatRow?: number;
   seatCol?: number;
+  gender?: 'male' | 'female'; // Nam / Nữ
+  present?: boolean; // Có mặt / Vắng
 }
 
 export interface CallHistoryItem {

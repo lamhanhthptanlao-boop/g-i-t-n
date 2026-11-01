@@ -116,8 +116,153 @@ body {
     animation: vibrateButton 0.1s linear infinite;
   }
 
-  .animate-idle-shake {
-    animation: idleWobbleShake 3.2s ease-in-out infinite;
+  @keyframes tiptoeBob {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-8px) rotate(0.8deg);
+    }
+  }
+
+  @keyframes sprintPanic {
+    0%, 100% {
+      transform: translateY(0px) rotate(-3deg) scale(1);
+    }
+    25% {
+      transform: translateY(-9px) rotate(2deg) scale(1.02);
+    }
+    50% {
+      transform: translateY(-4px) rotate(-2deg) scale(1);
+    }
+    75% {
+      transform: translateY(-11px) rotate(3deg) scale(1.02);
+    }
+  }
+
+  @keyframes dogGallop {
+    0%, 100% {
+      transform: translateY(0) rotate(0deg) scale(1);
+    }
+    25% {
+      transform: translateY(-12px) rotate(-5deg) scale(1.04);
+    }
+    50% {
+      transform: translateY(-4px) rotate(3deg) scale(1);
+    }
+    75% {
+      transform: translateY(-15px) rotate(-3deg) scale(1.03);
+    }
+  }
+
+  @keyframes chaChaChaDance {
+    0%, 100% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    15% {
+      transform: translate(-6px, -8px) rotate(-4deg) scale(1.03);
+    }
+    30% {
+      transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    45% {
+      transform: translate(6px, -8px) rotate(4deg) scale(1.03);
+    }
+    60% {
+      transform: translate(0, -4px) rotate(0deg) scale(1.02);
+    }
+    70% {
+      transform: translate(-3px, -12px) rotate(-3deg) scale(1.05);
+    }
+    80% {
+      transform: translate(3px, -12px) rotate(3deg) scale(1.05);
+    }
+    90% {
+      transform: translate(0, -6px) rotate(0deg) scale(1.02);
+    }
+  }
+
+  @keyframes snoreFloat {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.5);
+    }
+    30% {
+      opacity: 0.9;
+      transform: translate(8px, -18px) scale(0.85);
+    }
+    70% {
+      opacity: 0.8;
+      transform: translate(16px, -45px) scale(1.1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(25px, -80px) scale(1.3);
+    }
+  }
+
+  @keyframes slipperBounce {
+    0% {
+      transform: translate(0, 0) rotate(0deg);
+    }
+    20% {
+      transform: translate(30px, -40px) rotate(140deg);
+    }
+    40% {
+      transform: translate(65px, -15px) rotate(260deg);
+    }
+    60% {
+      transform: translate(90px, -30px) rotate(380deg);
+    }
+    80% {
+      transform: translate(110px, -5px) rotate(460deg);
+    }
+    100% {
+      transform: translate(125px, 0px) rotate(520deg);
+    }
+  }
+
+  @keyframes tearFly {
+    0% {
+      opacity: 1;
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: translate(-25px, 10px) scale(1.2);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-55px, 25px) scale(0.5);
+    }
+  }
+
+  .animate-tiptoe {
+    animation: tiptoeBob 0.65s ease-in-out infinite;
+  }
+
+  .animate-sprint-panic {
+    animation: sprintPanic 0.28s ease-in-out infinite;
+  }
+
+  .animate-dog-gallop {
+    animation: dogGallop 0.24s ease-in-out infinite;
+  }
+
+  .animate-chachacha {
+    animation: chaChaChaDance 1.1s ease-in-out infinite;
+  }
+
+  .animate-snore {
+    animation: snoreFloat 2.6s ease-out infinite;
+  }
+
+  .animate-slipper {
+    animation: slipperBounce 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  }
+
+  .animate-tear-spray {
+    animation: tearFly 0.5s linear infinite;
   }
 }
 

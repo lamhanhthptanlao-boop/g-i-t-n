@@ -30,6 +30,7 @@ import { VirtualMCHost } from './components/modes/VirtualMCHost';
 import { GashaponMachine3D } from './components/modes/GashaponMachine3D';
 import { CountdownStage } from './components/modes/CountdownStage';
 import { CameraGestureMode } from './components/modes/CameraGestureMode';
+import { SleepingDogMode } from './components/modes/SleepingDogMode';
 
 import { WinnerModal } from './components/WinnerModal';
 import { ConfettiOverlay } from './components/ConfettiOverlay';
@@ -128,6 +129,8 @@ export default function App() {
       duration: 4,
       dramaLevel: 'standard',
       enableTTS: true,
+      onlySpeakName: true,
+      vietnameseStandardAccent: true,
       reducedMotion: false,
       fireworksSpeed: 'normal',
       fireworksDuration: 5,
@@ -362,21 +365,22 @@ export default function App() {
     }));
     setHistory((prev) => [...newHistoryItems.reverse(), ...prev]);
 
-    // Speak winner name(s) if enableTTS is enabled
-    if (settings.enableTTS && gameMode !== 'virtual_mc') {
+    // Speak winner name(s) if enableTTS is enabled (respecting Rule 5: CHỈ ĐỌC TÊN)
+    if (settings.enableTTS && gameMode !== 'virtual_mc' && gameMode !== 'sleeping_dog') {
+      const onlyName = settings.onlySpeakName ?? true;
       if (chosenList.length === 1) {
         sound.speakVirtualMC(
-          formatStudentCallSpeech(chosenList[0].name),
+          formatStudentCallSpeech(chosenList[0].name, onlyName),
           settings.voiceURI,
-          settings.voiceRate,
-          settings.voicePitch
+          settings.voiceRate || 0.96,
+          settings.voicePitch || 1.02
         );
       } else {
         sound.speakVirtualMC(
-          formatMultiStudentCallSpeech(chosenList.map((s) => s.name)),
+          formatMultiStudentCallSpeech(chosenList.map((s) => s.name), onlyName),
           settings.voiceURI,
-          settings.voiceRate,
-          settings.voicePitch
+          settings.voiceRate || 0.96,
+          settings.voicePitch || 1.02
         );
       }
     }
@@ -673,18 +677,38 @@ export default function App() {
           </div>
         )}
 
-        {/* View Switcher: 10 Live Gameshows vs 5 3D Folk Games vs Camera AI vs Seating Map */}
+        {/* View Switcher: Mực Ơi Đừng Dậy vs 10 Live Gameshows vs 5 3D Folk Games vs Camera AI vs Seating Map */}
         {!isProjectorMode && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 p-1 bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-indigo-100 dark:border-slate-800 shadow-sm mb-3">
+            {/* Hot Game: Mực ơi đừng dậy! */}
             <button
               onClick={() => {
                 setViewTab('game');
-                if (['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)) {
+                setGameMode('sleeping_dog');
+                sound.playSparkle();
+              }}
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+                viewTab === 'game' && gameMode === 'sleeping_dog'
+                  ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-amber-300'
+                  : 'text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-100 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800'
+              }`}
+            >
+              <span className="text-sm">🐕</span>
+              <span>Mực ơi đừng dậy!</span>
+              <span className="px-1.5 py-0.2 rounded bg-rose-500 text-white text-[9px] font-black uppercase shadow-xs">
+                HOT
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setViewTab('game');
+                if (gameMode === 'sleeping_dog' || ['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)) {
                   setGameMode('gameshow_live');
                 }
               }}
               className={`px-3.5 sm:px-4 py-1.5 text-xs font-bold rounded-xl transition-all ${
-                viewTab === 'game' && !['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)
+                viewTab === 'game' && gameMode !== 'sleeping_dog' && !['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode)
                   ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/25 ring-2 ring-indigo-300/40'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
@@ -739,8 +763,9 @@ export default function App() {
         {!isProjectorMode && viewTab === 'game' && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mb-4 max-w-5xl px-2">
             {!['catch_duck', 'catch_chicken', 'steal_egg', 'blind_goat', 'xoc_dia'].includes(gameMode) ? (
-              // 10 Live Professional Gameshows
+              // 10 Live Professional Gameshows + Mực ơi đừng dậy
               [
+                { id: 'sleeping_dog', label: '🐕 Mực ơi đừng dậy! (HOT)', icon: '🐕' },
                 { id: 'gameshow_live', label: '1. Gameshow TV', icon: '🏆' },
                 { id: 'lottery_drum', label: '2. Lồng quay 3D', icon: '🎰' },
                 { id: 'wheel_3d', label: '3. Vòng quay 3D', icon: '🎡' },
@@ -819,6 +844,25 @@ export default function App() {
             />
           ) : (
             <>
+              {/* Game Hot: Mực Ơi Đừng Dậy! (Rượt bắt & nhảy Cha Cha Cha) */}
+              {gameMode === 'sleeping_dog' && (
+                <SleepingDogMode
+                  students={callMode === 'no_repeat' ? uncalledStudents : students}
+                  isPicking={isPicking}
+                  selectedStudent={currentSelectedStudent}
+                  selectedStudents={currentSelectedStudents}
+                  onTriggerPick={triggerPick}
+                  onPickEnd={handlePickAnimationEnd}
+                  duration={settings.duration}
+                  enableTTS={settings.enableTTS}
+                  onlySpeakName={settings.onlySpeakName ?? true}
+                  voiceURI={settings.voiceURI}
+                  voiceRate={settings.voiceRate}
+                  voicePitch={settings.voicePitch}
+                  onUpdateStudents={(newSts) => setStudents(newSts)}
+                />
+              )}
+
               {/* 1. Gameshow truyền hình trực tiếp */}
               {(gameMode === 'gameshow_live' || gameMode === 'gameshow') && (
                 <StageGameshow
@@ -1136,6 +1180,7 @@ export default function App() {
         remainingCount={remainingCount}
         callNumber={history.length}
         enableTTS={settings.enableTTS}
+        onlySpeakName={settings.onlySpeakName ?? true}
         isCameraMode={viewTab === 'camera' || gameMode === 'camera_gesture'}
         voiceURI={settings.voiceURI}
         voiceRate={settings.voiceRate}

@@ -362,6 +362,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </label>
                 </div>
 
+                {/* 5. CHỈ ĐỌC TÊN (Nhanh gọn, tập trung, chuẩn sư phạm) */}
+                <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/50 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🎯</span>
+                    <div>
+                      <div className="text-xs font-bold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                        <span>Chỉ Đọc Tên Học Sinh</span>
+                        <span className="px-1.5 py-0.2 rounded bg-amber-200 text-amber-800 dark:bg-amber-900 dark:text-amber-200 text-[9px] font-black uppercase">
+                          Tập trung
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400 block">
+                        Đọc dứt khoát chỉ tên học sinh (không đọc lời dẫn rườm rà), nhấn nhá cảm xúc
+                      </span>
+                    </div>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={settings.onlySpeakName ?? true}
+                      onChange={(e) =>
+                        onUpdateSettings({ ...settings, onlySpeakName: e.target.checked })
+                      }
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500" />
+                  </label>
+                </div>
+
                 {/* Quick Preset Voice Pills */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -552,21 +582,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="button"
                   onClick={() => {
                     setIsTestingVoice(true);
+                    const testText = (settings.onlySpeakName ?? true)
+                      ? 'Nguyễn Hoàng Tuấn Vũ!'
+                      : 'Xin chúc mừng bạn, Nguyễn Hoàng Tuấn Vũ!';
                     sound.speakVirtualMC(
-                      'Ms Mèo xin chúc mừng bạn Nguyễn Hoàng Tuấn Vũ đã tỏa sáng!',
+                      testText,
                       settings.voiceURI,
-                      settings.voiceRate,
-                      settings.voicePitch
+                      settings.voiceRate || 0.96,
+                      settings.voicePitch || 1.02
                     );
-                    setTimeout(() => setIsTestingVoice(false), 2800);
+                    setTimeout(() => setIsTestingVoice(false), 2200);
                   }}
                   className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/20 active:scale-95"
                 >
                   <Volume2 className={`w-4 h-4 ${isTestingVoice ? 'animate-bounce text-yellow-300' : ''}`} />
                   <span>
                     {isTestingVoice
-                      ? '🔊 Đang đọc thử: "Nguyễn Hoàng Tuấn Vũ"...'
-                      : 'Nghe thử phát âm chuẩn dấu Google / Microsoft 🔊'}
+                      ? '🔊 Đang phát: "Nguyễn Hoàng Tuấn Vũ!"'
+                      : 'Nghe thử giọng đọc tên tiếng Việt chuẩn dấu 🔊'}
                   </span>
                 </button>
               </div>
