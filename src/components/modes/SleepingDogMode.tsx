@@ -18,6 +18,13 @@ import {
   Trash2,
   Check,
 } from 'lucide-react';
+import {
+  dogTiptoeScene,
+  dogChaseRightScene,
+  dogChaseLeftScene,
+  dogChaChaChaScene,
+} from '../../assets/images';
+
 
 interface SleepingDogModeProps {
   students: Student[];
@@ -219,19 +226,19 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
     }
   };
 
-  // Base background image for each phase
+  // Base background image for each phase (bundled via Vite ESM + fallback)
   const currentSceneImage = useMemo(() => {
     switch (phase) {
       case 'idle_tiptoe':
-        return '/public/assets/aistudio/image_ae87ed81.png';
+        return dogTiptoeScene || '/assets/aistudio/image_ae87ed81.png';
       case 'chase_right':
-        return '/public/assets/aistudio/image_ea559153.png';
+        return dogChaseRightScene || '/assets/aistudio/image_ea559153.png';
       case 'chase_left':
-        return '/public/assets/aistudio/image_b81b0f14.png';
+        return dogChaseLeftScene || '/assets/aistudio/image_b81b0f14.png';
       case 'caught_winner':
-        return '/public/assets/aistudio/image_98cca7b5.png';
+        return dogChaChaChaScene || '/assets/aistudio/image_98cca7b5.png';
       default:
-        return '/public/assets/aistudio/image_ae87ed81.png';
+        return dogTiptoeScene || '/assets/aistudio/image_ae87ed81.png';
     }
   }, [phase]);
 
