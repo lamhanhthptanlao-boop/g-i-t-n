@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Student } from '../../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Student, SavedClass } from '../../types';
 import { sound } from '../../utils/soundEffects';
 import { formatStudentCallSpeech } from '../../utils/vietnameseSpeech';
 import {
@@ -9,14 +9,12 @@ import {
   Minimize2,
   Pause,
   Play,
-  RotateCcw,
-  Sparkles,
   Users,
   Flame,
-  Award,
-  Plus,
   Trash2,
   Check,
+  FolderPlus,
+  Save,
 } from 'lucide-react';
 import {
   dogTiptoeScene,
@@ -28,6 +26,9 @@ import {
 
 interface SleepingDogModeProps {
   students: Student[];
+  allStudents?: Student[];
+  savedClasses?: SavedClass[];
+  activeClassId?: string;
   isPicking: boolean;
   selectedStudent: Student | null;
   selectedStudents?: Student[];
@@ -40,6 +41,10 @@ interface SleepingDogModeProps {
   voiceRate?: number;
   voicePitch?: number;
   onUpdateStudents?: (newStudents: Student[]) => void;
+  onSelectClass?: (classId: string) => void;
+  onSaveAsNewClass?: (name: string, classStudents?: Student[]) => void;
+  onRenameClass?: (classId: string, newName: string) => void;
+  onDeleteClass?: (classId: string) => void;
 }
 
 type DogPhase = 'idle_tiptoe' | 'chase_right' | 'chase_left' | 'caught_winner';
@@ -105,6 +110,9 @@ const CHASE_LEFT_POSITIONS = [
 
 export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
   students,
+  allStudents,
+  savedClasses = [],
+  activeClassId,
   isPicking,
   selectedStudent,
   selectedStudents,
@@ -117,6 +125,10 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
   voiceRate,
   voicePitch,
   onUpdateStudents,
+  onSelectClass,
+  onSaveAsNewClass,
+  onRenameClass,
+  onDeleteClass,
 }) => {
   const [phase, setPhase] = useState<DogPhase>('idle_tiptoe');
   const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -130,6 +142,29 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
   const [newStudentGender, setNewStudentGender] = useState<'male' | 'female'>('male');
   const [bulkTextInput, setBulkTextInput] = useState<string>('');
 
+  // Multi-class management states inside roster modal
+  const activeClass = useMemo(
+    () => savedClasses.find((c) => c.id === activeClassId) || savedClasses[0],
+    [savedClasses, activeClassId]
+  );
+  const [classNameDraft, setClassNameDraft] = useState<string>(activeClass?.name || 'Lớp mẫu');
+  const [showAddClassInput, setShowAddClassInput] = useState<boolean>(false);
+  const [newClassTitle, setNewClassTitle] = useState<string>('');
+  const [confirmClearAll, setConfirmClearAll] = useState<boolean>(false);
+  const [confirmDeleteClass, setConfirmDeleteClass] = useState<boolean>(false);
+  const [saveToast, setSaveToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeClass?.name) {
+      setClassNameDraft(activeClass.name);
+    }
+  }, [activeClass?.id, activeClass?.name]);
+
+  const rosterStudents = useMemo(
+    () => (allStudents && allStudents.length >= 0 ? allStudents : students),
+    [allStudents, students]
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const snoreIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -137,6 +172,10 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
   const activeStudents = useMemo(() => {
     return students.filter((s) => s.present !== false);
   }, [students]);
+
+  const rosterPresentStudents = useMemo(() => {
+    return rosterStudents.filter((s) => s.present !== false);
+  }, [rosterStudents]);
 
   // Winner list
   const winnersList =
@@ -253,7 +292,7 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
       gender: newStudentGender,
       present: true,
     };
-    onUpdateStudents([...students, newSt]);
+    onUpdateStudents([...rosterStudents, newSt]);
     setNewStudentName('');
     sound.playSparkle();
   };
@@ -282,20 +321,27 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
   const handleTogglePresent = (id: string) => {
     if (!onUpdateStudents) return;
     onUpdateStudents(
-      students.map((s) => (s.id === id ? { ...s, present: s.present === false ? true : false } : s))
+      rosterStudents.map((s) => (s.id === id ? { ...s, present: s.present === false ? true : false } : s))
     );
   };
 
   const handleToggleGender = (id: string) => {
     if (!onUpdateStudents) return;
     onUpdateStudents(
-      students.map((s) => (s.id === id ? { ...s, gender: s.gender === 'female' ? 'male' : 'female' } : s))
+      rosterStudents.map((s) => (s.id === id ? { ...s, gender: s.gender === 'female' ? 'male' : 'female' } : s))
     );
   };
 
   const handleDeleteStudent = (id: string) => {
     if (!onUpdateStudents) return;
-    onUpdateStudents(students.filter((s) => s.id !== id));
+    onUpdateStudents(rosterStudents.filter((s) => s.id !== id));
+  };
+
+  const triggerSaveToast = (msg: string) => {
+    setSaveToast(msg);
+    setTimeout(() => {
+      setSaveToast((prev) => (prev === msg ? null : prev));
+    }, 2200);
   };
 
   return (
@@ -704,7 +750,7 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
                 <h2 className="text-xl sm:text-2xl font-black text-amber-400 flex items-center gap-2">
                   <span>Mực ơi đừng dậy!</span>
                   <span className="text-sm font-semibold text-emerald-200">
-                    · Tùy chọn tên theo danh sách lớp
+                    · Lưu lớp &amp; danh sách học sinh
                   </span>
                 </h2>
                 <p className="text-xs text-emerald-200/90 mt-0.5">
@@ -718,6 +764,162 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
                 ✕
               </button>
             </div>
+
+            {/* Saved Classes Switcher & Save Bar (Lớp học & Lưu lớp) */}
+            {savedClasses.length > 0 && (
+              <div className="mb-3 p-2.5 rounded-2xl bg-emerald-950/70 border border-emerald-700/60 flex flex-col gap-2 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-emerald-200 mr-1">Lớp học:</span>
+                    {savedClasses.map((cls) => {
+                      const isActive = cls.id === activeClass?.id;
+                      return (
+                        <button
+                          key={cls.id}
+                          type="button"
+                          onClick={() => onSelectClass?.(cls.id)}
+                          className={`px-2.5 py-1 rounded-full font-bold transition-all flex items-center gap-1.5 ${
+                            isActive
+                              ? 'bg-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-emerald-900/80 text-emerald-100 hover:bg-emerald-800 border border-emerald-700'
+                          }`}
+                        >
+                          <span>{cls.name}</span>
+                          <span className={`text-[10px] font-mono ${isActive ? 'text-slate-800' : 'text-emerald-300'}`}>
+                            {cls.students.length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddClassInput((prev) => !prev)}
+                    className="px-3 py-1 rounded-full bg-emerald-700 hover:bg-emerald-600 text-white font-bold flex items-center gap-1 border border-emerald-500/60"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>+ Thêm / Lưu lớp</span>
+                  </button>
+                </div>
+
+                {/* Active class rename / save current / delete row */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-emerald-800/70">
+                  <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <span className="font-bold text-amber-300 shrink-0">Tên lớp:</span>
+                    <input
+                      type="text"
+                      value={classNameDraft}
+                      onChange={(e) => setClassNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && activeClass && classNameDraft.trim() && onRenameClass) {
+                          onRenameClass(activeClass.id, classNameDraft.trim());
+                          triggerSaveToast(`Đã lưu tên lớp "${classNameDraft.trim()}"`);
+                        }
+                      }}
+                      className="flex-1 max-w-[210px] px-2.5 py-1 rounded-lg bg-slate-900/90 border border-emerald-600 text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeClass && classNameDraft.trim() && onRenameClass) {
+                          onRenameClass(activeClass.id, classNameDraft.trim());
+                          triggerSaveToast(`Đã lưu lớp "${classNameDraft.trim()}"`);
+                          sound.playSparkle();
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-black flex items-center gap-1"
+                    >
+                      <Save className="w-3 h-3" />
+                      <span>Lưu lớp</span>
+                    </button>
+                  </div>
+
+                  {confirmDeleteClass ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-rose-300">Xóa lớp này?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (activeClass && onDeleteClass) {
+                            onDeleteClass(activeClass.id);
+                          }
+                          setConfirmDeleteClass(false);
+                        }}
+                        className="px-2 py-0.5 rounded bg-rose-600 text-white font-bold"
+                      >
+                        Xác nhận
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteClass(false)}
+                        className="px-2 py-0.5 rounded bg-emerald-800 text-emerald-200"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteClass(true)}
+                      className="text-rose-300 hover:text-rose-200 underline font-semibold"
+                    >
+                      Xóa lớp này
+                    </button>
+                  )}
+                </div>
+
+                {/* Add new saved class input */}
+                {showAddClassInput && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-emerald-800/70">
+                    <input
+                      type="text"
+                      value={newClassTitle}
+                      onChange={(e) => setNewClassTitle(e.target.value)}
+                      placeholder="Tên lớp mới (VD: 10A1, Lớp 6B)..."
+                      className="flex-1 min-w-[180px] px-2.5 py-1 rounded-lg bg-slate-900/90 border border-emerald-500 text-white text-xs"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!onSaveAsNewClass) return;
+                        const name = newClassTitle.trim() || `Lớp ${savedClasses.length + 1}`;
+                        onSaveAsNewClass(name, rosterStudents);
+                        setNewClassTitle('');
+                        setShowAddClassInput(false);
+                        triggerSaveToast(`Đã lưu thành lớp mới "${name}"`);
+                        sound.playSparkle();
+                      }}
+                      className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                    >
+                      Lưu danh sách hiện tại thành lớp mới
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!onSaveAsNewClass) return;
+                        const name = newClassTitle.trim() || `Lớp ${savedClasses.length + 1}`;
+                        onSaveAsNewClass(name, []);
+                        setNewClassTitle('');
+                        setShowAddClassInput(false);
+                        triggerSaveToast(`Đã tạo lớp trống "${name}"`);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-200 font-bold border border-emerald-600"
+                    >
+                      Tạo lớp trống
+                    </button>
+                  </div>
+                )}
+
+                {saveToast && (
+                  <div className="text-emerald-300 font-bold flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{saveToast}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Quick Add Row & Excel Paste */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-xs">
@@ -778,10 +980,10 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
               <div className="flex items-center gap-2">
                 <span className="font-bold text-amber-300">Sĩ số:</span>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-900 border border-emerald-600 text-white font-mono font-bold">
-                  {activeStudents.length}/{students.length} học sinh
+                  {rosterPresentStudents.length}/{rosterStudents.length} học sinh
                 </span>
                 <span className="text-[11px] text-emerald-300">
-                  · còn {students.filter((s) => !s.called && s.present !== false).length} chưa gọi
+                  · còn {rosterStudents.filter((s) => !s.called && s.present !== false).length} chưa gọi
                 </span>
               </div>
 
@@ -789,7 +991,7 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
                 <button
                   onClick={() => {
                     if (onUpdateStudents) {
-                      onUpdateStudents(students.map((s) => ({ ...s, called: false })));
+                      onUpdateStudents(rosterStudents.map((s) => ({ ...s, called: false })));
                       sound.playSparkle();
                     }
                   }}
@@ -798,27 +1000,45 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
                   Làm mới lượt gọi
                 </button>
                 <span>·</span>
-                <button
-                  onClick={() => {
-                    if (onUpdateStudents && confirm('Bạn có chắc muốn xóa tất cả học sinh để nhập mới?')) {
-                      onUpdateStudents([]);
-                    }
-                  }}
-                  className="text-rose-400 hover:underline font-bold"
-                >
-                  Xóa hết
-                </button>
+                {confirmClearAll ? (
+                  <span className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdateStudents?.([]);
+                        setConfirmClearAll(false);
+                      }}
+                      className="text-rose-300 font-bold underline"
+                    >
+                      Chắc chắn xóa hết?
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmClearAll(false)}
+                      className="text-emerald-200 underline"
+                    >
+                      Hủy
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => setConfirmClearAll(true)}
+                    className="text-rose-400 hover:underline font-bold"
+                  >
+                    Xóa hết
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Instruction strip */}
             <div className="p-2 rounded-xl bg-amber-400/10 border border-amber-400/30 text-[11px] text-amber-200 mb-2.5">
-              💡 Bấm <strong>Nam / Nữ</strong> để đổi nhân vật · Bấm <strong>Có mặt / Vắng</strong> để chuyển trạng thái · Tên trên ảnh sẽ tự động hiển thị theo danh sách này!
+              💡 Bấm <strong>Nam / Nữ</strong> để đổi nhân vật · Bấm <strong>Có mặt / Vắng</strong> để chuyển trạng thái · Dữ liệu lớp học được tự động lưu!
             </div>
 
             {/* Student Badge Grid */}
             <div className="flex-1 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pr-1 mb-3">
-              {students.map((st, idx) => (
+              {rosterStudents.map((st, idx) => (
                 <div
                   key={st.id}
                   className={`p-2 rounded-xl border flex items-center justify-between gap-2 transition-all ${
@@ -879,7 +1099,7 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
             {/* Modal Footer */}
             <div className="flex items-center justify-between pt-3 border-t border-emerald-700/60">
               <span className="text-xs text-emerald-300">
-                ★ đã lên bảng · Đang chọn sẵn <strong>{activeStudents.length} bạn</strong>
+                ★ đã lên bảng · Đang chọn sẵn <strong>{rosterPresentStudents.length} bạn</strong>
               </span>
               <button
                 onClick={() => {
@@ -889,7 +1109,7 @@ export const SleepingDogMode: React.FC<SleepingDogModeProps> = ({
                 className="px-6 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs shadow-lg transition-all active:scale-95 flex items-center gap-1.5"
               >
                 <Play className="w-4 h-4 fill-white" />
-                <span>Bắt đầu · {activeStudents.length} bạn</span>
+                <span>Bắt đầu · {rosterPresentStudents.length} bạn</span>
               </button>
             </div>
           </div>

@@ -75,3 +75,11 @@ export interface GestureEvent {
   label: string;
   confidence: number;
 }
+
+export interface SavedClass {
+  id: string;
+  name: string;
+  students: Student[];
+  updatedAt: number;
+}
+

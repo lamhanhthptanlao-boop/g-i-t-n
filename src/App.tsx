@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Student, GameMode, CallMode, ThemeMode, CallHistoryItem } from './types';
+import { Student, SavedClass, GameMode, CallMode, ThemeMode, CallHistoryItem } from './types';
 import { sound } from './utils/soundEffects';
 import { DEFAULT_STUDENTS } from './utils/studentParser';
 import { gestureDetector } from './utils/handGestureDetector';
@@ -43,7 +43,12 @@ import { SettingsModal } from './components/SettingsModal';
 import { GameshowSettings } from './types';
 import { launchMiniConfettiBurst } from './utils/celebrationEffects';
 import { formatStudentCallSpeech, formatMultiStudentCallSpeech } from './utils/vietnameseSpeech';
-import { catLogo, msMeoMascot } from './assets/images';
+import {
+  catLogo,
+  msMeoMascot,
+  cuteClassroomBackdrop,
+  gameshowStageBackdrop,
+} from './assets/images';
 
 import {
   Volume2,
@@ -61,26 +66,95 @@ import {
   SunMedium,
   Moon,
   Settings,
+  BookmarkCheck,
 } from 'lucide-react';
 
 export default function App() {
-  // 1. Core State
-  const [students, setStudents] = useState<Student[]>(() => {
+  // 1. Core Multi-Class & Student State
+  const [savedClasses, setSavedClasses] = useState<SavedClass[]>(() => {
     try {
-      const saved = localStorage.getItem('classroom_magic_students');
-      if (saved) return JSON.parse(saved);
+      const savedClassesRaw = localStorage.getItem('classroom_magic_classes');
+      if (savedClassesRaw) {
+        const parsed = JSON.parse(savedClassesRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      const legacyStudentsRaw = localStorage.getItem('classroom_magic_students');
+      if (legacyStudentsRaw) {
+        const legacyStudents = JSON.parse(legacyStudentsRaw);
+        if (Array.isArray(legacyStudents)) {
+          return [
+            {
+              id: 'class_default',
+              name: 'Lớp mẫu',
+              students: legacyStudents,
+              updatedAt: Date.now(),
+            },
+          ];
+        }
+      }
     } catch {
       // Fallback
     }
-    return DEFAULT_STUDENTS.map((name, idx) => ({
-      id: `student_${idx}`,
-      name,
-      called: false,
-      callCount: 0,
-      seatRow: Math.floor(idx / 6),
-      seatCol: idx % 6,
-    }));
+    return [
+      {
+        id: 'class_default',
+        name: 'Lớp mẫu',
+        students: DEFAULT_STUDENTS.map((name, idx) => ({
+          id: `student_${idx}`,
+          name,
+          called: false,
+          callCount: 0,
+          seatRow: Math.floor(idx / 6),
+          seatCol: idx % 6,
+          present: true,
+        })),
+        updatedAt: Date.now(),
+      },
+    ];
   });
+
+  const [activeClassId, setActiveClassId] = useState<string>(() => {
+    return localStorage.getItem('classroom_magic_active_class_id') || 'class_default';
+  });
+
+  const activeClass = useMemo(() => {
+    return savedClasses.find((c) => c.id === activeClassId) || savedClasses[0];
+  }, [savedClasses, activeClassId]);
+
+  const students = useMemo(() => activeClass?.students || [], [activeClass]);
+
+  const setStudents = useCallback(
+    (updater: Student[] | ((prev: Student[]) => Student[])) => {
+      setSavedClasses((prevClasses) => {
+        const targetId =
+          prevClasses.find((c) => c.id === activeClassId)?.id || prevClasses[0]?.id;
+        if (!targetId) {
+          const initialStudents = typeof updater === 'function' ? updater([]) : updater;
+          return [
+            {
+              id: 'class_default',
+              name: 'Lớp mẫu',
+              students: initialStudents,
+              updatedAt: Date.now(),
+            },
+          ];
+        }
+        return prevClasses.map((cls) => {
+          if (cls.id !== targetId) return cls;
+          const nextStudents =
+            typeof updater === 'function' ? updater(cls.students) : updater;
+          return {
+            ...cls,
+            students: nextStudents,
+            updatedAt: Date.now(),
+          };
+        });
+      });
+    },
+    [activeClassId]
+  );
 
   const [history, setHistory] = useState<CallHistoryItem[]>(() => {
     try {
@@ -113,9 +187,74 @@ export default function App() {
   const [showWinnerModal, setShowWinnerModal] = useState<boolean>(false);
   const [isConfettiActive, setIsConfettiActive] = useState<boolean>(false);
   const [showManagerModal, setShowManagerModal] = useState<boolean>(false);
+  const [managerInitialTab, setManagerInitialTab] = useState<'paste' | 'manage' | 'classes'>('paste');
   const [showHistoryDrawer, setShowHistoryDrawer] = useState<boolean>(false);
   const [isProjectorMode, setIsProjectorMode] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  const handleSelectClass = useCallback(
+    (classId: string) => {
+      if (isPicking) return;
+      setActiveClassId(classId);
+      setCurrentSelectedStudent(null);
+      setCurrentSelectedStudents([]);
+      sound.playSpinTick(1.1);
+    },
+    [isPicking]
+  );
+
+  const handleSaveAsNewClass = useCallback(
+    (name: string, classStudents?: Student[]) => {
+      const newId = `class_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const clonedStudents = (classStudents ?? students).map((s, idx) => ({
+        ...s,
+        id: s.id || `student_${Date.now()}_${idx}`,
+      }));
+      const newClass: SavedClass = {
+        id: newId,
+        name: name.trim() || `Lớp ${savedClasses.length + 1}`,
+        students: clonedStudents,
+        updatedAt: Date.now(),
+      };
+      setSavedClasses((prev) => [...prev, newClass]);
+      setActiveClassId(newId);
+      sound.playSparkle();
+    },
+    [students, savedClasses.length]
+  );
+
+  const handleRenameClass = useCallback((classId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setSavedClasses((prev) =>
+      prev.map((cls) =>
+        cls.id === classId ? { ...cls, name: trimmed, updatedAt: Date.now() } : cls
+      )
+    );
+  }, []);
+
+  const handleDeleteClass = useCallback(
+    (classId: string) => {
+      setSavedClasses((prev) => {
+        const remaining = prev.filter((c) => c.id !== classId);
+        if (remaining.length === 0) {
+          const fresh: SavedClass = {
+            id: `class_${Date.now()}`,
+            name: 'Lớp mới',
+            students: [],
+            updatedAt: Date.now(),
+          };
+          setActiveClassId(fresh.id);
+          return [fresh];
+        }
+        if (classId === activeClassId) {
+          setActiveClassId(remaining[0].id);
+        }
+        return remaining;
+      });
+    },
+    [activeClassId]
+  );
 
   // Gameshow Settings (Duration, Drama, TTS, Reduced Motion)
   const [settings, setSettings] = useState<GameshowSettings>(() => {
@@ -212,8 +351,17 @@ export default function App() {
 
   // 2. Persistence sync
   useEffect(() => {
-    localStorage.setItem('classroom_magic_students', JSON.stringify(students));
-  }, [students]);
+    localStorage.setItem('classroom_magic_classes', JSON.stringify(savedClasses));
+    if (activeClass) {
+      localStorage.setItem('classroom_magic_students', JSON.stringify(activeClass.students));
+    }
+  }, [savedClasses, activeClass]);
+
+  useEffect(() => {
+    if (activeClass?.id) {
+      localStorage.setItem('classroom_magic_active_class_id', activeClass.id);
+    }
+  }, [activeClass?.id]);
 
   useEffect(() => {
     localStorage.setItem('classroom_magic_history', JSON.stringify(history));
@@ -482,9 +630,7 @@ export default function App() {
 
   // Background styling based on theme
   const backdropImage =
-    theme === 'cute'
-      ? '/src/assets/images/cute_classroom_backdrop_1793182499927.jpg'
-      : '/src/assets/images/gameshow_stage_backdrop_1793182500158.jpg';
+    theme === 'cute' ? cuteClassroomBackdrop : gameshowStageBackdrop;
 
   return (
     <div
@@ -627,13 +773,19 @@ export default function App() {
             />
           )}
 
-          {/* Student Roster Button */}
+          {/* Student Roster & Saved Classes Button */}
           <button
-            onClick={() => setShowManagerModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all hover:scale-105"
+            onClick={() => {
+              setManagerInitialTab('paste');
+              setShowManagerModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all hover:scale-105 whitespace-nowrap shrink-0"
+            title="Quản lý danh sách học sinh & các lớp đã lưu"
           >
             <Users className="w-4 h-4" />
-            <span className="hidden sm:inline">Danh sách ({totalStudents})</span>
+            <span className="hidden sm:inline truncate max-w-[140px]">
+              {activeClass?.name || 'Danh sách'} ({totalStudents})
+            </span>
           </button>
 
           {/* History Drawer Button */}
@@ -848,6 +1000,9 @@ export default function App() {
               {gameMode === 'sleeping_dog' && (
                 <SleepingDogMode
                   students={callMode === 'no_repeat' ? uncalledStudents : students}
+                  allStudents={students}
+                  savedClasses={savedClasses}
+                  activeClassId={activeClass?.id || activeClassId}
                   isPicking={isPicking}
                   selectedStudent={currentSelectedStudent}
                   selectedStudents={currentSelectedStudents}
@@ -860,6 +1015,10 @@ export default function App() {
                   voiceRate={settings.voiceRate}
                   voicePitch={settings.voicePitch}
                   onUpdateStudents={(newSts) => setStudents(newSts)}
+                  onSelectClass={handleSelectClass}
+                  onSaveAsNewClass={handleSaveAsNewClass}
+                  onRenameClass={handleRenameClass}
+                  onDeleteClass={handleDeleteClass}
                 />
               )}
 
@@ -1071,7 +1230,7 @@ export default function App() {
         </div>
 
         {/* Primary Call Action Button & Live Counters Strip */}
-        <div className="w-full max-w-xl mx-auto flex flex-col items-center gap-3 my-4">
+        <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-3 my-4">
           <div className="w-full flex items-center justify-center gap-2 sm:gap-3 max-w-lg">
             {/* Main "GỌI TÊN NGAY!" CTA with Suspense Vibration Effect */}
             <button
@@ -1103,14 +1262,46 @@ export default function App() {
             Mẹo: Nhấn phím <kbd className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Space</kbd> hoặc <kbd className="px-1.5 py-0.5 rounded-md bg-slate-200 dark:bg-slate-800 font-mono text-[10px]">Enter</kbd> trên bàn phím để gọi tên ngay!
           </span>
 
-          {/* Classroom Stats & Rule Toggle */}
+          {/* Classroom Stats, Class Switcher ("Lưu lớp") & Rule Toggle */}
           <div className="w-full flex flex-wrap items-center justify-between gap-3 p-3 bg-white/90 dark:bg-slate-900/90 rounded-2xl border border-indigo-100 dark:border-slate-800 shadow-sm backdrop-blur-xs text-xs">
+            {/* Quick Saved Class Selector + Save Class Button */}
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="active-class-select" className="text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
+                Lớp:
+              </label>
+              <select
+                id="active-class-select"
+                value={activeClass?.id || activeClassId}
+                onChange={(e) => handleSelectClass(e.target.value)}
+                disabled={isPicking}
+                className="max-w-[140px] px-2.5 py-1 rounded-lg font-bold bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+              >
+                {savedClasses.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.name} ({cls.students.length})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setManagerInitialTab('classes');
+                  setShowManagerModal(true);
+                }}
+                className="px-2.5 py-1 rounded-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition-colors flex items-center gap-1 whitespace-nowrap shrink-0"
+                title="Lưu lớp mới, đổi tên hoặc chuyển đổi giữa các lớp đã lưu"
+              >
+                <BookmarkCheck className="w-3.5 h-3.5" />
+                <span>Lưu lớp</span>
+              </button>
+            </div>
+
             {/* Rule mode picker: No repeat vs Allow repeat */}
             <div className="flex items-center gap-2">
               <span className="text-slate-500 dark:text-slate-400 font-medium">Quy tắc:</span>
               <button
                 onClick={() => setCallMode(callMode === 'no_repeat' ? 'allow_repeat' : 'no_repeat')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg font-bold transition-all whitespace-nowrap shrink-0 ${
                   callMode === 'no_repeat'
                     ? 'bg-emerald-500 text-white shadow-xs'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
@@ -1207,7 +1398,14 @@ export default function App() {
       <StudentManagerModal
         isOpen={showManagerModal}
         students={students}
+        savedClasses={savedClasses}
+        activeClassId={activeClass?.id || activeClassId}
+        initialTab={managerInitialTab}
         onUpdateStudents={(newSts) => setStudents(newSts)}
+        onSelectClass={handleSelectClass}
+        onSaveAsNewClass={handleSaveAsNewClass}
+        onRenameClass={handleRenameClass}
+        onDeleteClass={handleDeleteClass}
         onClose={() => setShowManagerModal(false)}
       />
 
