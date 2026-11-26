@@ -264,6 +264,109 @@ body {
   .animate-tear-spray {
     animation: tearFly 0.5s linear infinite;
   }
+
+  @keyframes xmasSnowFall {
+    0% {
+      transform: translate3d(0, -10vh, 0) rotate(0deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 0.9;
+    }
+    90% {
+      opacity: 0.85;
+    }
+    100% {
+      transform: translate3d(28px, 108vh, 0) rotate(360deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes xmasSantaFly {
+    0% {
+      transform: translate3d(-26vw, 18px, 0) rotate(-2deg);
+    }
+    50% {
+      transform: translate3d(40vw, -8px, 0) rotate(1.5deg);
+    }
+    100% {
+      transform: translate3d(112vw, 14px, 0) rotate(-1.5deg);
+    }
+  }
+
+  @keyframes xmasSantaVillagePass {
+    0% {
+      transform: translate3d(-34vw, 28px, 0) rotate(-3deg) scale(0.92);
+      opacity: 0.95;
+    }
+    48% {
+      transform: translate3d(34vw, -4px, 0) rotate(1.2deg) scale(1.06);
+      opacity: 1;
+    }
+    100% {
+      transform: translate3d(112vw, 18px, 0) rotate(-2deg) scale(0.95);
+      opacity: 0.95;
+    }
+  }
+
+  @keyframes xmasTwinkle {
+    0%, 100% {
+      opacity: 0.35;
+      transform: scale(0.88);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.18);
+    }
+  }
+
+  @keyframes xmasFloatBob {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes xmasStarPop {
+    0% {
+      opacity: 1;
+      transform: scale(0.3) rotate(0deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.22) rotate(160deg);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.55) rotate(280deg);
+    }
+  }
+
+  .animate-xmas-snow {
+    animation: xmasSnowFall linear infinite;
+  }
+
+  .animate-xmas-santa {
+    animation: xmasSantaFly 26s linear infinite;
+  }
+
+  .animate-xmas-santa-pass {
+    animation: xmasSantaVillagePass 3.6s cubic-bezier(0.32, 0.06, 0.28, 0.94) forwards;
+  }
+
+  .animate-xmas-twinkle {
+    animation: xmasTwinkle 2.2s ease-in-out infinite;
+  }
+
+  .animate-xmas-bob {
+    animation: xmasFloatBob 2.8s ease-in-out infinite;
+  }
+
+  .animate-xmas-star-pop {
+    animation: xmasStarPop 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }
 
 /* Custom scrollbar */

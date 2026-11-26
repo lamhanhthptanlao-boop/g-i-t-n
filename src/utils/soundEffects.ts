@@ -12,6 +12,10 @@ class SoundEngine {
   private bgmOscillators: OscillatorNode[] = [];
   private bgmGain: GainNode | null = null;
   private isBgmPlaying: boolean = false;
+  private isChristmasBgmPlaying: boolean = false;
+  private christmasBgmInterval: number | undefined;
+  private christmasMusicGain: GainNode | null = null;
+  private christmasMusicVolume: number = 0.55;
 
   private voices: SpeechSynthesisVoice[] = [];
   private selectedVoiceURI: string | null = null;
@@ -87,6 +91,9 @@ class SoundEngine {
     this.isMuted = muted;
     if (muted && this.isBgmPlaying) {
       this.stopBGM();
+    }
+    if (muted && this.isChristmasBgmPlaying) {
+      this.stopChristmasBGM();
     }
   }
 
@@ -1048,6 +1055,363 @@ class SoundEngine {
       this.playSparkle();
     } catch {
       // Ignore
+    }
+  }
+
+  /**
+   * Christmas Sleigh Bells & Festive Chime (Chuông Giáng sinh)
+   */
+  public playChristmasBell() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      const bellFreqs = [1318.51, 1567.98, 2093.0, 2637.02]; // E6, G6, C7, E7
+      bellFreqs.forEach((f, idx) => {
+        const start = ctx.currentTime + idx * 0.065;
+        const osc = ctx.createOscillator();
+        const harmonic = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, start);
+
+        harmonic.type = 'triangle';
+        harmonic.frequency.setValueAtTime(f * 2.01, start);
+
+        gain.gain.setValueAtTime(0.18 * this.volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.45);
+
+        osc.connect(gain);
+        harmonic.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(start);
+        harmonic.start(start);
+        osc.stop(start + 0.46);
+        harmonic.stop(start + 0.46);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Magical Star Explosion Chime when completing a Christmas challenge
+   */
+  public playChristmasStarReward() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51, 1567.98, 2093.0];
+      notes.forEach((f, idx) => {
+        const start = ctx.currentTime + idx * 0.055;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, start);
+
+        gain.gain.setValueAtTime(0.22 * this.volume, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.42);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.44);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  /**
+   * Christmas Background Music (Gentle celesta/music-box "Jingle Bells" & "We Wish You")
+   */
+  public setChristmasMusicVolume(vol: number) {
+    this.christmasMusicVolume = Math.max(0, Math.min(1, vol));
+    if (this.christmasMusicGain && this.ctx) {
+      this.christmasMusicGain.gain.setValueAtTime(
+        this.christmasMusicVolume * 0.18,
+        this.ctx.currentTime
+      );
+    }
+  }
+
+  public getChristmasMusicVolume() {
+    return this.christmasMusicVolume;
+  }
+
+  public isChristmasBgmActive() {
+    return this.isChristmasBgmPlaying;
+  }
+
+  public toggleChristmasBGM(): boolean {
+    if (this.isChristmasBgmPlaying) {
+      this.stopChristmasBGM();
+      return false;
+    }
+    this.startChristmasBGM();
+    return true;
+  }
+
+  /**
+   * Gentle sleigh-bell sparkle shimmer when Santa's sleigh flies across the sky
+   */
+  public playChristmasSleighFly() {
+    if (this.isMuted) return;
+    try {
+      const ctx = this.initContext();
+      const notes = [1046.5, 1318.51, 1567.98, 2093.0];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        const t = ctx.currentTime + i * 0.09;
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(this.volume * 0.14, t + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.58);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
+  public startChristmasBGM() {
+    if (this.isMuted || this.isChristmasBgmPlaying) return;
+    try {
+      const ctx = this.initContext();
+      // Stop general gameshow BGM if active so melodies never clash
+      if (this.isBgmPlaying) {
+        this.stopBGM();
+      }
+
+      this.isChristmasBgmPlaying = true;
+      const musicGain = ctx.createGain();
+      musicGain.gain.setValueAtTime(this.christmasMusicVolume * 0.22, ctx.currentTime);
+      musicGain.connect(ctx.destination);
+      this.christmasMusicGain = musicGain;
+
+      // Festive Christmas Medley: Jingle Bells + We Wish You a Merry Christmas
+      const G4 = 392.0,
+        A4 = 440.0,
+        B4 = 493.88,
+        C5 = 523.25,
+        D5 = 587.33,
+        E5 = 659.25,
+        F5 = 698.46,
+        G5 = 783.99;
+
+      const melody: Array<{ f: number; bass?: number; jingle?: boolean }> = [
+        // --- Part 1: Jingle Bells ---
+        { f: E5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: G5 },
+        { f: C5, bass: 196.0, jingle: true },
+        { f: D5 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: 0 },
+        { f: 0, jingle: true },
+        { f: 0 },
+        { f: F5, bass: 349.23, jingle: true },
+        { f: F5 },
+        { f: F5, bass: 261.63, jingle: true },
+        { f: F5 },
+        { f: F5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 293.66, jingle: true },
+        { f: D5 },
+        { f: D5, bass: 196.0, jingle: true },
+        { f: E5 },
+        { f: D5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: G5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: G5 },
+        { f: C5, bass: 196.0, jingle: true },
+        { f: D5 },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: 0 },
+        { f: 0, jingle: true },
+        { f: 0 },
+        { f: F5, bass: 349.23, jingle: true },
+        { f: F5 },
+        { f: F5, bass: 261.63, jingle: true },
+        { f: F5 },
+        { f: F5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: E5, bass: 196.0, jingle: true },
+        { f: E5 },
+        { f: G5, bass: 196.0, jingle: true },
+        { f: G5 },
+        { f: F5, bass: 293.66, jingle: true },
+        { f: D5 },
+        { f: C5, bass: 261.63, jingle: true },
+        { f: 0 },
+        { f: 0 },
+        { f: 0 },
+
+        // --- Part 2: We Wish You a Merry Christmas ---
+        { f: G4, bass: 196.0, jingle: true },
+        { f: C5, bass: 261.63, jingle: true },
+        { f: C5 },
+        { f: D5 },
+        { f: C5 },
+        { f: B4 },
+        { f: A4, bass: 220.0, jingle: true },
+        { f: A4 },
+        { f: A4, bass: 174.61, jingle: true },
+        { f: D5, bass: 293.66, jingle: true },
+        { f: D5 },
+        { f: E5 },
+        { f: D5 },
+        { f: C5 },
+        { f: B4, bass: 196.0, jingle: true },
+        { f: G4 },
+        { f: G4, bass: 196.0, jingle: true },
+        { f: E5, bass: 261.63, jingle: true },
+        { f: E5 },
+        { f: F5 },
+        { f: E5 },
+        { f: D5 },
+        { f: C5, bass: 220.0, jingle: true },
+        { f: A4 },
+        { f: G4, bass: 196.0, jingle: true },
+        { f: G4 },
+        { f: A4, bass: 174.61, jingle: true },
+        { f: D5, bass: 293.66 },
+        { f: B4, bass: 196.0, jingle: true },
+        { f: C5, bass: 261.63, jingle: true },
+        { f: 0 },
+        { f: 0 },
+        // Uplifting bridge
+        { f: G4, bass: 196.0, jingle: true },
+        { f: C5, bass: 261.63, jingle: true },
+        { f: C5 },
+        { f: C5 },
+        { f: B4, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: B4, jingle: true },
+        { f: C5 },
+        { f: B4, bass: 196.0, jingle: true },
+        { f: A4 },
+        { f: G4, bass: 196.0, jingle: true },
+        { f: 0 },
+        { f: D5, bass: 293.66, jingle: true },
+        { f: E5 },
+        { f: D5, bass: 196.0, jingle: true },
+        { f: C5 },
+        { f: G5, bass: 261.63, jingle: true },
+        { f: G4 },
+        { f: G4, jingle: true },
+        { f: G4 },
+        { f: A4, bass: 174.61, jingle: true },
+        { f: D5, bass: 293.66 },
+        { f: B4, bass: 196.0, jingle: true },
+        { f: C5, bass: 261.63, jingle: true },
+        { f: 0 },
+        { f: 0 },
+      ];
+
+      let idx = 0;
+      const intervalId = window.setInterval(() => {
+        if (!this.isChristmasBgmPlaying || this.isMuted) {
+          clearInterval(intervalId);
+          return;
+        }
+        try {
+          const step = melody[idx % melody.length];
+          const now = ctx.currentTime;
+          if (step.f > 0) {
+            const osc = ctx.createOscillator();
+            const g = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(step.f, now);
+            g.gain.setValueAtTime(0.001, now);
+            g.gain.linearRampToValueAtTime(0.36, now + 0.025);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+            osc.connect(g);
+            g.connect(musicGain);
+            osc.start(now);
+            osc.stop(now + 0.44);
+
+            // Warm music-box octave shimmer
+            const overtone = ctx.createOscillator();
+            const og = ctx.createGain();
+            overtone.type = 'triangle';
+            overtone.frequency.setValueAtTime(step.f * 2, now);
+            og.gain.setValueAtTime(0.001, now);
+            og.gain.linearRampToValueAtTime(0.09, now + 0.02);
+            og.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+            overtone.connect(og);
+            og.connect(musicGain);
+            overtone.start(now);
+            overtone.stop(now + 0.27);
+          }
+          if (step.bass) {
+            const bOsc = ctx.createOscillator();
+            const bGain = ctx.createGain();
+            bOsc.type = 'triangle';
+            bOsc.frequency.setValueAtTime(step.bass, now);
+            bGain.gain.setValueAtTime(0.001, now);
+            bGain.gain.linearRampToValueAtTime(0.2, now + 0.03);
+            bGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+            bOsc.connect(bGain);
+            bGain.connect(musicGain);
+            bOsc.start(now);
+            bOsc.stop(now + 0.58);
+          }
+          if (step.jingle) {
+            // Subtle high sleigh-bell shimmer on strong beats
+            const jOsc = ctx.createOscillator();
+            const jGain = ctx.createGain();
+            jOsc.type = 'sine';
+            jOsc.frequency.setValueAtTime(3135.96, now);
+            jGain.gain.setValueAtTime(0.035, now);
+            jGain.gain.exponentialRampToValueAtTime(0.0005, now + 0.08);
+            jOsc.connect(jGain);
+            jGain.connect(musicGain);
+            jOsc.start(now);
+            jOsc.stop(now + 0.09);
+          }
+          idx++;
+        } catch {
+          // Ignore
+        }
+      }, 310);
+
+      this.christmasBgmInterval = intervalId;
+    } catch {
+      this.isChristmasBgmPlaying = false;
+    }
+  }
+
+  public stopChristmasBGM() {
+    this.isChristmasBgmPlaying = false;
+    if (this.christmasBgmInterval !== undefined) {
+      clearInterval(this.christmasBgmInterval);
+      this.christmasBgmInterval = undefined;
     }
   }
 }

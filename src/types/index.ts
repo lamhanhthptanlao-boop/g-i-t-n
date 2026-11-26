@@ -1,6 +1,7 @@
 export type GameMode =
-  // Đặc biệt: Game "Mực ơi đừng dậy!" (Trò chơi gọi tên hot nhất)
+  // Đặc biệt: Game "Mực ơi đừng dậy!" & "Christmas Magic 3D"
   | 'sleeping_dog'     // Chú Mực canh cổng trường / Mực ơi đừng dậy
+  | 'christmas'        // Christmas Magic - The Christmas Lucky Student
   // 10 Live Professional Gameshow Modes
   | 'gameshow_live'    // 1. Gameshow truyền hình trực tiếp
   | 'lottery_drum'     // 2. Máy rút thăm điện tử 3D
@@ -82,4 +83,17 @@ export interface SavedClass {
   students: Student[];
   updatedAt: number;
 }
+
+export type ChristmasMiniGameId =
+  | 'village'
+  | 'tree'
+  | 'santa_gift'
+  | 'mystery_gift'
+  | 'star_rewards';
+
+export interface ChristmasChallenge {
+  id: string;
+  text: string;
+}
+
 

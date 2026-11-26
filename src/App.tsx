@@ -31,6 +31,7 @@ import { GashaponMachine3D } from './components/modes/GashaponMachine3D';
 import { CountdownStage } from './components/modes/CountdownStage';
 import { CameraGestureMode } from './components/modes/CameraGestureMode';
 import { SleepingDogMode } from './components/modes/SleepingDogMode';
+import { ChristmasMagicMode } from './components/christmas/ChristmasMagicMode';
 
 import { WinnerModal } from './components/WinnerModal';
 import { ConfettiOverlay } from './components/ConfettiOverlay';
@@ -191,6 +192,7 @@ export default function App() {
   const [showHistoryDrawer, setShowHistoryDrawer] = useState<boolean>(false);
   const [isProjectorMode, setIsProjectorMode] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isChristmasMode, setIsChristmasMode] = useState<boolean>(false);
 
   const handleSelectClass = useCallback(
     (classId: string) => {
@@ -587,7 +589,33 @@ export default function App() {
   const handleResetRound = useCallback(() => {
     setStudents((prev) => prev.map((s) => ({ ...s, called: false })));
     sound.playSparkle();
-  }, []);
+  }, [setStudents]);
+
+  // Sync Christmas Mode selections with main student roster & call history
+  const handleChristmasMarkCalled = useCallback(
+    (chosen: Student[], _miniGameLabel: string) => {
+      if (chosen.length === 0) return;
+      const chosenIds = new Set(chosen.map((s) => s.id));
+      const now = Date.now();
+      setStudents((prev) =>
+        prev.map((s) =>
+          chosenIds.has(s.id)
+            ? { ...s, called: true, callCount: s.callCount + 1, lastCalledAt: now }
+            : s
+        )
+      );
+      const newItems: CallHistoryItem[] = chosen.map((st, idx) => ({
+        id: `call_xmas_${now}_${idx}_${Math.random().toString(36).substring(2, 6)}`,
+        studentId: st.id,
+        studentName: st.name,
+        timestamp: now + idx,
+        order: history.length + idx + 1,
+        mode: 'christmas',
+      }));
+      setHistory((prev) => [...newItems.reverse(), ...prev]);
+    },
+    [history.length, setStudents]
+  );
 
   // Centralized function to stop all camera streams and return to gameshow stage
   const handleReturnHome = useCallback(() => {
@@ -616,7 +644,7 @@ export default function App() {
   // Keyboard shortcut: Spacebar or Enter triggers pick
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showWinnerModal || showManagerModal || showHistoryDrawer) return;
+      if (isChristmasMode || showWinnerModal || showManagerModal || showHistoryDrawer) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if (e.code === 'Space' || e.code === 'Enter') {
@@ -626,7 +654,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [triggerPick, pickCount, showWinnerModal, showManagerModal, showHistoryDrawer]);
+  }, [triggerPick, pickCount, isChristmasMode, showWinnerModal, showManagerModal, showHistoryDrawer]);
 
   // Background styling based on theme
   const backdropImage =
@@ -850,6 +878,24 @@ export default function App() {
               <span className="px-1.5 py-0.2 rounded bg-rose-500 text-white text-[9px] font-black uppercase shadow-xs">
                 HOT
               </span>
+            </button>
+
+            {/* New Mode: 🎄 CHRISTMAS MODE */}
+            <button
+              onClick={() => {
+                setIsChristmasMode(true);
+                sound.playChristmasBell();
+                sound.startChristmasBGM();
+              }}
+              className={`px-3.5 sm:px-4 py-1.5 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 ${
+                isChristmasMode
+                  ? 'bg-gradient-to-r from-rose-600 via-red-600 to-emerald-600 text-white shadow-md ring-2 ring-amber-300'
+                  : 'bg-gradient-to-r from-rose-600 to-emerald-700 hover:from-rose-500 hover:to-emerald-600 text-white shadow-sm ring-1 ring-amber-300/60'
+              }`}
+              title="Mở thế giới Noel 3D - The Christmas Lucky Student"
+            >
+              <span className="text-sm">🎄</span>
+              <span>CHRISTMAS MODE</span>
             </button>
 
             <button
@@ -1437,6 +1483,30 @@ export default function App() {
           <span>{badge.text}</span>
         </div>
       ))}
+
+      {/* 🎄 CHRISTMAS MAGIC – THE CHRISTMAS LUCKY STUDENT (Full-screen 3D World) */}
+      {isChristmasMode && (
+        <ChristmasMagicMode
+          students={students}
+          activeClassName={activeClass?.name || 'Lớp mặc định'}
+          callMode={callMode}
+          onToggleCallMode={() =>
+            setCallMode((prev) => (prev === 'no_repeat' ? 'allow_repeat' : 'no_repeat'))
+          }
+          onMarkCalled={handleChristmasMarkCalled}
+          onResetRound={handleResetRound}
+          onOpenStudentManager={() => {
+            setManagerInitialTab('manage');
+            setShowManagerModal(true);
+          }}
+          onBackToHome={() => setIsChristmasMode(false)}
+          enableTTS={settings.enableTTS}
+          onlySpeakName={settings.onlySpeakName ?? true}
+          voiceURI={settings.voiceURI}
+          voiceRate={settings.voiceRate}
+          voicePitch={settings.voicePitch}
+        />
+      )}
     </div>
   );
 }

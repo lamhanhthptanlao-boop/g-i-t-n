@@ -7,6 +7,7 @@ import dogTiptoeScene from './images/image_ae87ed81.png';
 import dogChaseRightScene from './images/image_ea559153.png';
 import dogChaseLeftScene from './images/image_b81b0f14.png';
 import dogChaChaChaScene from './images/image_98cca7b5.png';
+import santaSleighReindeerImg from './images/santa_sleigh_reindeer.png';
 
 export {
   catLogo,
@@ -18,5 +19,6 @@ export {
   dogChaseRightScene,
   dogChaseLeftScene,
   dogChaChaChaScene,
+  santaSleighReindeerImg,
 };
 
