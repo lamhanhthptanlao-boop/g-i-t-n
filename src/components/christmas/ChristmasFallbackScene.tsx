@@ -175,7 +175,7 @@ export const ChristmasFallbackScene: React.FC<ChristmasFallbackSceneProps> = ({
     >
       {/* Cozy Snowy Christmas Village Street Depth Layer */}
       <img
-        src="/assets/aistudio/image_736fc4b4.png"
+        src="./assets/aistudio/image_736fc4b4.png"
         alt="Snowy Christmas Village"
         referrerPolicy="no-referrer"
         style={{
